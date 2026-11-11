@@ -1,0 +1,123 @@
+\section{Introducción}
+
+\subsection{Contexto y propósito}
+
+Java no se instala como un programa único. Lo que se instala es una plataforma formada
+por tres piezas que conviene distinguir desde el principio, porque confundirlas es el
+origen de la mayoría de los problemas durante el proceso:
+
+\begin{itemize}
+	\item La \textbf{JVM} (\textit{Java Virtual Machine}) es la máquina virtual que
+	ejecuta el \textit{bytecode}. Es lo que hace que un programa compilado en una
+	computadora funcione en otra con un sistema operativo distinto.
+	\item El \textbf{JRE} (\textit{Java Runtime Environment}) agrupa la JVM más las
+	bibliotecas estándar. Con él se pueden \textbf{ejecutar} aplicaciones Java, pero no
+	escribirlas.
+	\item El \textbf{JDK} (\textit{Java Development Kit}) contiene todo lo anterior más
+	las herramientas de desarrollo: el compilador \texttt{javac}, el depurador
+	\texttt{jdb}, el empaquetador \texttt{jar}, el generador de documentación
+	\texttt{javadoc} y, desde Java~9, el ensamblador de imágenes \texttt{jlink}.
+\end{itemize}
+
+La distinción importa porque muchas distribuciones de Linux traen preinstalado
+únicamente el JRE. Un equipo así puede abrir cualquier aplicación Java y, sin embargo,
+al escribir \texttt{javac Programa.java} responde \texttt{command not found}. Ese es
+exactamente el estado inicial de la máquina documentada en este reporte.
+
+\subsection{Por qué hace falta configurar \texttt{JAVA\_HOME}}
+
+Instalar el JDK deja disponibles los comandos \texttt{java} y \texttt{javac} en la
+terminal, y para un ejercicio de clase eso podría bastar. El problema aparece en cuanto
+se usa cualquier herramienta del ecosistema.
+
+Maven, Gradle, Apache Tomcat, Apache Ant, Elasticsearch, Jenkins y los entornos de
+desarrollo como IntelliJ IDEA o Eclipse \textbf{no buscan el compilador en el
+\texttt{PATH}}: consultan una variable de entorno llamada \texttt{JAVA\_HOME} que debe
+apuntar al \textbf{directorio raíz} de la instalación del JDK. Si esa variable no
+existe o apunta al lugar equivocado, esas herramientas fallan con mensajes del estilo
+\texttt{JAVA\_HOME is not set and no `java' command could be found}, aunque
+\texttt{java -version} funcione perfectamente en esa misma terminal.
+
+Hay una segunda razón, menos evidente pero igual de importante: una computadora puede
+tener \textbf{varias versiones del JDK instaladas al mismo tiempo}. Es lo normal en un
+equipo de desarrollo, donde un proyecto heredado exige Java~8 y otro requiere Java~21.
+En ese escenario, \texttt{JAVA\_HOME} es el mecanismo que declara cuál de todas es la
+que debe usarse, y el sistema de alternativas de Debian y Ubuntu
+(\texttt{update-alternatives}) es el que resuelve qué binario responde al escribir
+\texttt{java}.
+
+\subsection{Objetivos}
+
+De acuerdo con lo solicitado en la práctica:
+
+\begin{enumerate}
+	\item \textbf{Identificar} las variables de entorno necesarias para la correcta
+	ejecución del Java Development Kit, en particular \texttt{JAVA\_HOME} y su relación
+	con \texttt{PATH}.
+	\item \textbf{Configurar} dichas variables de forma persistente en un sistema
+	GNU/Linux, verificando que la configuración sobreviva al cierre de la terminal y al
+	reinicio del equipo.
+	\item \textbf{Documentar} el procedimiento completo —verificación del estado
+	inicial, desinstalación de versiones previas, instalación, configuración y
+	comprobación— con evidencia gráfica de cada etapa.
+\end{enumerate}
+
+\subsection{Entorno de trabajo}
+
+\rowcolors{2}{rowblue}{white}
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{4pt}
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{4.6cm}|>{\raggedright\arraybackslash}p{9.6cm}|}
+	\caption{Características del equipo utilizado}
+	\label{tab:entorno} \\
+	\hline
+	\rowcolor{headerblue}
+	\headercell{Elemento} & \headercell{Valor} \\
+	\hline
+	\endfirsthead
+	\hline
+	\rowcolor{headerblue}
+	\headercell{Elemento} & \headercell{Valor} \\
+	\hline
+	\endhead
+
+	Sistema operativo & Ubuntu 22.04.5 LTS (Jammy Jellyfish) \\ \hline
+	Arquitectura & x86\_64 (64 bits) \\ \hline
+	Intérprete de comandos & Bash \\ \hline
+	Estado inicial de Java & OpenJDK 11 JRE (solo entorno de ejecución, sin compilador) \\ \hline
+	Versión a instalar & OpenJDK 21 LTS \\ \hline
+	Método de instalación & Gestor de paquetes APT, repositorio \textit{jammy-updates} \\ \hline
+	Privilegios requeridos & Cuenta con acceso a \texttt{sudo} \\ \hline
+\end{longtable}
+
+\normalsize
+\setlength{\tabcolsep}{6pt}
+
+\subsection{Nota sobre la distribución elegida}
+
+La práctica menciona \textit{Oracle Java Development Kit}. En este reporte se documenta
+la instalación de \textbf{OpenJDK 21}, y conviene justificar la decisión porque no es
+una omisión sino una elección técnica.
+
+Desde Java~7, \textbf{OpenJDK es la implementación de referencia del lenguaje}: el
+código fuente del que parte Oracle para construir su propia distribución es el mismo
+proyecto OpenJDK. Ambas superan el conjunto de pruebas de compatibilidad TCK, de modo
+que un programa compilado con una funciona idénticamente en la otra. Las diferencias
+relevantes son de licencia y de soporte comercial, no de comportamiento:
+
+\begin{itemize}
+	\item \textbf{OpenJDK} se distribuye bajo licencia GPLv2 con excepción de enlazado,
+	es de uso libre en cualquier contexto y llega empaquetado en los repositorios
+	oficiales de Ubuntu, lo que simplifica la instalación y las actualizaciones de
+	seguridad.
+	\item \textbf{Oracle JDK} se distribuye bajo la \textit{Oracle No-Fee Terms and
+	Conditions}, que permite el uso gratuito con restricciones, y requiere descargar el
+	paquete manualmente aceptando la licencia.
+\end{itemize}
+
+Todo lo relativo a \texttt{JAVA\_HOME}, al \texttt{PATH} y al sistema de alternativas
+—que es el objetivo de aprendizaje de la práctica— es \textbf{idéntico} en ambos casos;
+lo único que cambia es la ruta de instalación. En la sección de conclusiones se retoma
+esta comparación.

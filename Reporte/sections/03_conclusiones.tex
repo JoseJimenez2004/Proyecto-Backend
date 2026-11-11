@@ -1,0 +1,177 @@
+\section{Conclusiones}
+
+\subsection{Sobre el proceso}
+
+\textbf{Primera: instalar el JDK y configurarlo son dos tareas distintas, y la segunda
+es la que realmente se estaba practicando.} La instalación se resuelve con un solo
+comando de APT y difícilmente falla. Lo que sí falla —y lo que ninguna herramienta
+avisa— es la configuración de las variables de entorno: un sistema puede tener el JDK
+perfectamente instalado, responder correctamente a \texttt{java -version} y aun así ser
+incapaz de compilar un proyecto con Maven, porque \texttt{JAVA\_HOME} no existe o apunta
+a otro lado.
+
+\textbf{Segunda: la distinción entre JRE y JDK explica el error más frecuente.} El
+estado inicial del equipo documentado en este reporte —una JVM funcionando sin
+compilador— es exactamente el que produce la confusión de creer que "Java ya está
+instalado". La comprobación que separa un caso del otro no es \texttt{java -version}
+sino \texttt{javac -version}.
+
+\textbf{Tercera: \texttt{JAVA\_HOME} debe apuntar a un directorio, no a un ejecutable.}
+Es el error conceptual que más se repite. La variable nombra el \textbf{directorio raíz}
+de la instalación —el que contiene \texttt{bin}, \texttt{lib} y \texttt{conf}—, porque
+las herramientas que la consultan construyen a partir de ella rutas como
+\texttt{\$JAVA\_HOME/bin/javac} o \texttt{\$JAVA\_HOME/lib/tools.jar}. Apuntarla al
+binario rompe todas esas construcciones a la vez.
+
+\textbf{Cuarta: la persistencia depende del archivo elegido, no del comando.} Escribir
+\texttt{export JAVA\_HOME=...} directamente en la terminal funciona hasta que se cierra
+la ventana. Que la configuración sobreviva depende de haberla escrito en el archivo
+correcto, y ese archivo cambia según quién necesite ver la variable: el usuario en su
+terminal, las aplicaciones gráficas, o los servicios del sistema.
+
+\subsection{Errores posibles durante el proceso y su solución}
+
+El siguiente catálogo reúne los problemas que pueden presentarse, ordenados por
+frecuencia, con su causa y la forma de corregirlos.
+
+\rowcolors{2}{rowblue}{white}
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{4pt}
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{4.1cm}|>{\raggedright\arraybackslash}p{4.6cm}|>{\raggedright\arraybackslash}p{5.5cm}|}
+	\caption{Errores frecuentes en la instalación y configuración del JDK}
+	\label{tab:errores} \\
+	\hline
+	\rowcolor{headerblue}
+	\headercell{Síntoma} & \headercell{Causa} & \headercell{Solución} \\
+	\hline
+	\endfirsthead
+	\hline
+	\rowcolor{headerblue}
+	\headercell{Síntoma} & \headercell{Causa} & \headercell{Solución} \\
+	\hline
+	\endhead
+
+	\texttt{javac: command not found} pero \texttt{java} sí funciona & Se instaló el
+	paquete \texttt{jre} en lugar del \texttt{jdk} & \texttt{sudo apt install
+	openjdk-21-jdk}. El sufijo del paquete es lo que distingue uno de otro. \\ \hline
+
+	\texttt{echo \$JAVA\_HOME} sigue vacío tras editar el archivo & No se releyó la
+	configuración: la terminal abierta conserva el entorno anterior & \texttt{source
+	\textasciitilde/.bashrc}, o cerrar y abrir la terminal. \\ \hline
+
+	\texttt{\$JAVA\_HOME/bin/java: No such file or directory} & La variable apunta al
+	ejecutable o al subdirectorio \texttt{bin} en vez de a la raíz del JDK & Usar
+	\texttt{/usr/lib/\allowbreak jvm/\allowbreak java-21-\allowbreak openjdk-amd64}, sin \texttt{/bin} ni \texttt{/bin/java}
+	al final. \\ \hline
+
+	Maven o Gradle reportan \texttt{JAVA\_HOME is not set} aunque \texttt{java} funcione
+	& La variable se definió solo para terminales interactivas y el proceso no la hereda
+	& Definirla en \texttt{\textasciitilde/.profile} o en \texttt{/etc/profile.d/}, y
+	cerrar la sesión para que surta efecto. \\ \hline
+
+	La configuración se pierde al cerrar la terminal & Se ejecutó \texttt{export} en la
+	línea de comandos, sin escribirlo en ningún archivo & Agregar las líneas a
+	\texttt{\textasciitilde/.bashrc} y volver a cargarlo. \\ \hline
+
+	Tras editar el \texttt{PATH}, ningún comando funciona (\texttt{ls}, \texttt{cd}\dots)
+	& Se sobrescribió el \texttt{PATH} en vez de ampliarlo & Recuperar la sesión con
+	\texttt{export PATH=/usr/bin:/bin} y corregir la línea para que termine en
+	\texttt{:\$PATH}. \\ \hline
+
+	\texttt{java -version} reporta una versión distinta a la instalada & Hay varias
+	versiones y el sistema de alternativas apunta a otra & \texttt{sudo
+	update-alternatives --config java} y elegir la deseada. \\ \hline
+
+	El IDE compila con una versión y la terminal con otra & \texttt{JAVA\_HOME} y
+	\texttt{update-alternatives} apuntan a JDK distintos & Alinear ambos, y revisar
+	además el JDK configurado dentro del propio IDE. \\ \hline
+
+	\texttt{E: se interrumpió la ejecución de dpkg} en cualquier comando de APT & Una
+	instalación anterior de \textbf{cualquier} paquete quedó a medio configurar, y APT se
+	bloquea hasta repararlo & \texttt{sudo dpkg --configure -a}, después \texttt{sudo apt
+	--fix-broken install}. Diagnosticar con \texttt{sudo dpkg --audit}. \\ \hline
+
+	\texttt{Unable to locate package openjdk-21-jdk} & Índices de APT desactualizados, o
+	la versión no existe para esa distribución & \texttt{sudo apt update} y verificar con
+	\texttt{apt-cache policy}. En versiones antiguas de Ubuntu puede hacer falta un PPA.
+	\\ \hline
+
+	\texttt{404 Not Found} a mitad de la descarga & El catálogo local apunta a una
+	versión que el repositorio ya reemplazó & \texttt{sudo apt update} y repetir la
+	instalación. \\ \hline
+
+	\texttt{Permission denied} al editar \texttt{/etc/environment} & El archivo es del
+	sistema y requiere privilegios & Usar \texttt{sudo nano /etc/environment}. \\ \hline
+
+	\texttt{/etc/environment} no surte efecto & Se escribió con la sintaxis
+	\texttt{export CLAVE=valor} & Ese archivo solo admite pares \texttt{CLAVE="valor"},
+	sin \texttt{export}. \\ \hline
+
+	\texttt{apt autoremove} propone eliminar programas en uso & Aplicaciones de
+	escritorio que dependen del Java que se está retirando & Revisar la lista antes de
+	aceptar; si hay dudas, no desinstalar y convivir con ambas versiones. \\ \hline
+
+	Todo funciona hasta reiniciar, y entonces se pierde & La variable se definió en un
+	archivo que la sesión nueva no lee & Verificar el archivo elegido según la tabla
+	\ref{tab:alcance} y comprobar con una terminal recién abierta. \\ \hline
+
+	\texttt{Unsupported\allowbreak ClassVersion\allowbreak Error} al ejecutar & El \textit{bytecode} se compiló
+	con una versión más nueva que la JVM que lo ejecuta & Alinear las versiones, o
+	compilar con \texttt{javac --release 21}. \\ \hline
+\end{longtable}
+
+\normalsize
+\setlength{\tabcolsep}{6pt}
+
+\subsection{Recomendaciones}
+
+\begin{enumerate}
+	\item \textbf{Diagnosticar antes de instalar.} Ejecutar \texttt{javac -version} y
+	\texttt{echo \$JAVA\_HOME} antes de tocar nada evita instalar sobre una configuración
+	que ya existía y que quedará huérfana.
+
+	\item \textbf{Verificar con \texttt{\$JAVA\_HOME/bin/java -version}}, no solo con
+	\texttt{echo \$JAVA\_HOME}. Lo primero comprueba que la ruta \textbf{existe y es
+	válida}; lo segundo solo muestra una cadena de texto que puede estar mal escrita.
+
+	\item \textbf{Comprobar en una terminal nueva.} Es la única forma de saber si la
+	configuración es persistente o si solo vive en la sesión actual.
+
+	\item \textbf{Usar el enlace simbólico y no la ruta con número de versión.} En
+	Ubuntu, \texttt{/usr/lib/\allowbreak jvm/\allowbreak java-21-\allowbreak openjdk-amd64} se mantiene estable entre
+	actualizaciones menores, mientras que una ruta como
+	\texttt{\dots/jdk-21.0.11} deja de existir en cuanto el paquete se actualiza a
+	\texttt{21.0.12}, y \texttt{JAVA\_HOME} queda apuntando a la nada.
+
+	\item \textbf{Para varias versiones, considerar SDKMAN.} En equipos de desarrollo que
+	alternan entre proyectos con distintas versiones de Java, una herramienta de gestión
+	como SDKMAN evita reconfigurar variables a mano. Conviene saber que ese tipo de
+	herramientas también modifica \texttt{JAVA\_HOME}, y que mezclarla con una
+	configuración manual en \texttt{.bashrc} produce conflictos difíciles de rastrear.
+\end{enumerate}
+
+\subsection{Sobre la distribución utilizada}
+
+Se documentó la instalación de OpenJDK en lugar de Oracle JDK. Vale la pena cerrar
+señalando qué habría cambiado y qué no.
+
+\textbf{No habría cambiado nada de lo esencial.} Ambas distribuciones parten del mismo
+código fuente del proyecto OpenJDK, superan el mismo conjunto de pruebas de
+compatibilidad y ejecutan idénticamente el mismo \textit{bytecode}. Todo lo relativo a
+\texttt{JAVA\_HOME}, al \texttt{PATH}, al sistema de alternativas y a los errores
+catalogados arriba aplica exactamente igual.
+
+\textbf{Habría cambiado el procedimiento de obtención y la ruta.} Con Oracle JDK habría
+que descargar el paquete \texttt{.deb} desde el sitio de Oracle aceptando su licencia,
+instalarlo con \texttt{sudo dpkg -i}, y \texttt{JAVA\_HOME} apuntaría a
+\texttt{/usr/lib/jvm/jdk-21-oracle}. A cambio de ese trabajo manual se pierde la
+actualización automática por APT: cada parche de seguridad exigiría repetir la descarga.
+
+\textbf{La diferencia real es de licencia.} OpenJDK se distribuye bajo GPLv2 con
+excepción de enlazado, sin restricciones de uso. Oracle JDK se rige por los
+\textit{Oracle No-Fee Terms and Conditions}, que permiten el uso gratuito bajo
+condiciones específicas y han cambiado varias veces en los últimos años. Para un entorno
+académico y para la mayoría de los proyectos, OpenJDK es la opción con menos fricción
+legal y operativa.

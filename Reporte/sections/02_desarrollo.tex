@@ -1,0 +1,355 @@
+\section{Desarrollo}
+
+El procedimiento se organizó en cinco fases. Cada una incluye los comandos ejecutados y
+la evidencia gráfica del resultado obtenido.
+
+% =====================================================================
+\subsection{Fase 1: verificación del estado inicial}
+% =====================================================================
+
+Antes de instalar cualquier cosa conviene averiguar qué hay. Saltarse este paso es la
+causa más común de terminar con dos o tres versiones del JDK conviviendo sin que el
+usuario sepa cuál está usando realmente.
+
+\begin{lstlisting}[language=bash,caption={Diagnóstico del estado inicial},morekeywords={java,javac,echo,which,readlink,dpkg,grep}]
+# Version del entorno de ejecucion
+java -version
+
+# Version del compilador: si responde "command not found",
+# lo que hay instalado es el JRE y no el JDK
+javac -version
+
+# Contenido de la variable de entorno: si sale vacio, no esta configurada
+echo "JAVA_HOME = [$JAVA_HOME]"
+
+# Ubicacion real del binario, siguiendo los enlaces simbolicos
+which java
+readlink -f $(which java)
+\end{lstlisting}
+
+En el equipo utilizado, \texttt{java -version} respondió con OpenJDK~11, mientras que
+\texttt{javac -version} devolvió \texttt{command not found} y \texttt{JAVA\_HOME}
+apareció vacía. Es decir: había un entorno de ejecución, pero no un kit de desarrollo.
+
+\evidencia{01-verificacion-inicial.png}{Estado inicial del sistema: existe la JVM pero no el compilador, y \texttt{JAVA\_HOME} está vacía}{verificacion-inicial}
+
+También conviene inventariar los paquetes relacionados que el gestor tiene registrados,
+porque son los que habrá que retirar:
+
+\begin{lstlisting}[language=bash,caption={Inventario de paquetes Java instalados},morekeywords={dpkg,grep,awk,ls}]
+# Paquetes de Java registrados en el sistema
+dpkg -l | grep -iE "jdk|jre"
+
+# Versiones presentes en el directorio estandar de JVM
+ls -la /usr/lib/jvm/
+\end{lstlisting}
+
+\evidencia{02-paquetes-instalados.png}{Paquetes relacionados con Java presentes antes de la instalación}{paquetes-instalados}
+
+% =====================================================================
+\subsection{Fase 2: desinstalación de versiones previas}
+% =====================================================================
+
+Esta fase es opcional en un equipo limpio, pero es la que evita el escenario más
+confuso de todos: tener varias versiones instaladas y no saber cuál responde.
+
+\begin{lstlisting}[language=bash,caption={Retiro de la versión anterior},morekeywords={sudo,apt,remove,purge,autoremove,java,javac}]
+# --purge elimina tambien los archivos de configuracion, no solo el paquete
+sudo apt remove --purge "openjdk-11-*" -y
+
+# Retira las dependencias que quedaron huerfanas
+sudo apt autoremove -y
+
+# Comprobacion: ambos comandos deben responder "command not found"
+java -version
+javac -version
+\end{lstlisting}
+
+\evidencia{03-desinstalacion.png}{Salida del proceso de desinstalación de OpenJDK 11}{desinstalacion}
+
+\evidencia{04-verificacion-limpieza.png}{Verificación de que el sistema quedó sin ninguna versión de Java}{verificacion-limpieza}
+
+\textbf{Incidencia registrada durante esta práctica.} Al ejecutar el primer comando,
+el sistema respondió:
+
+\begin{lstlisting}[language=bash,caption={Error por una operación de dpkg interrumpida},morekeywords={sudo,apt,remove,purge,dpkg,configure}]
+$ sudo apt remove --purge "openjdk-11-*" -y
+E: se interrumpio la ejecucion de dpkg, debe ejecutar manualmente
+   «sudo dpkg --configure -a» para corregir el problema
+\end{lstlisting}
+
+El mensaje no tiene relación con Java: indica que una instalación anterior de
+\textbf{cualquier} paquete quedó a medio configurar, y APT se niega a realizar
+operaciones nuevas mientras la base de datos de paquetes esté en ese estado
+inconsistente. La reparación es la que el propio mensaje sugiere:
+
+\begin{lstlisting}[language=bash,caption={Reparación del estado de dpkg},morekeywords={sudo,dpkg,configure,apt,fix-broken,install,update,audit}]
+# Termina la configuracion pendiente
+sudo dpkg --configure -a
+
+# Repara dependencias rotas, si las hubiera
+sudo apt --fix-broken install
+
+# Comprueba que APT vuelve a operar con normalidad
+sudo apt update
+\end{lstlisting}
+
+Si el problema persiste, \texttt{sudo dpkg --audit} enumera los paquetes que quedaron
+en estado inconsistente, lo que permite identificar cuál es el que falla.
+
+\evidencia{03a-dpkg-interrumpido.png}{Error por una operación de \texttt{dpkg} interrumpida y su reparación}{dpkg-interrumpido}
+
+\textbf{Advertencia importante.} En Ubuntu, varias aplicaciones de escritorio dependen
+de Java. Si \texttt{apt autoremove} propone eliminar programas que se están usando,
+conviene revisar la lista antes de aceptar. Cuando existan dudas, la alternativa
+prudente es \textbf{no desinstalar}: instalar la versión nueva junto a la anterior y
+seleccionar cuál usar con \texttt{update-alternatives}, como se explica en la fase~4.
+
+% =====================================================================
+\subsection{Fase 3: descarga e instalación del JDK}
+% =====================================================================
+
+\subsubsection{Actualización de los índices de paquetes}
+
+APT trabaja con una copia local del catálogo de los repositorios. Si esa copia está
+desactualizada, el sistema puede no encontrar el paquete o intentar descargar una
+versión que ya no existe en el servidor —un error frecuente que se manifiesta como
+\texttt{404 Not Found} a mitad de la instalación—.
+
+\begin{lstlisting}[language=bash,caption={Actualización del catálogo de paquetes},morekeywords={sudo,apt,update}]
+sudo apt update
+\end{lstlisting}
+
+\evidencia{05-actualizar-indices.png}{Actualización de los índices de los repositorios}{actualizar-indices}
+
+\subsubsection{Consulta de la versión disponible}
+
+Antes de instalar conviene confirmar qué versión exacta ofrece el repositorio y de
+cuál procede:
+
+\begin{lstlisting}[language=bash,caption={Consulta de la versión candidata},morekeywords={apt-cache,policy,apt,search}]
+# Version candidata y repositorio de origen
+apt-cache policy openjdk-21-jdk
+
+# Todas las versiones del JDK disponibles en los repositorios
+apt search --names-only "^openjdk-.*-jdk$"
+\end{lstlisting}
+
+En Ubuntu 22.04 el paquete proviene del repositorio \textit{jammy-updates}, en la
+sección \textit{universe}, con la versión \texttt{21.0.11+10-1\textasciitilde 22.04.2}.
+
+\evidencia{06-version-disponible.png}{Versión candidata de \texttt{openjdk-21-jdk} y repositorio del que proviene}{version-disponible}
+
+\subsubsection{Instalación}
+
+\begin{lstlisting}[language=bash,caption={Instalación del JDK},morekeywords={sudo,apt,install}]
+sudo apt install openjdk-21-jdk -y
+\end{lstlisting}
+
+Nótese que el paquete es \texttt{openjdk-21-\textbf{jdk}} y no
+\texttt{openjdk-21-\textbf{jre}}. Instalar el segundo por descuido deja el sistema en el
+mismo estado del que se partió: con máquina virtual pero sin compilador.
+
+\evidencia{07-instalacion.png}{Proceso de instalación de OpenJDK 21}{instalacion}
+
+\subsubsection{Verificación de la instalación}
+
+\begin{lstlisting}[language=bash,caption={Comprobación de que el JDK quedó instalado},morekeywords={java,javac,version}]
+java -version      # entorno de ejecucion
+javac -version     # compilador: ahora si debe responder
+\end{lstlisting}
+
+Ambos comandos deben reportar la versión 21. Que \texttt{javac} responda es la señal de
+que se instaló un JDK y no solo un JRE.
+
+\evidencia{08-verificacion-version.png}{Versiones de \texttt{java} y \texttt{javac} tras la instalación}{verificacion-version}
+
+% =====================================================================
+\subsection{Fase 4: configuración de las variables de entorno}
+% =====================================================================
+
+Esta es la parte central de la práctica y la que más errores concentra.
+
+\subsubsection{Identificación de la ruta de instalación}
+
+\texttt{JAVA\_HOME} debe apuntar al \textbf{directorio raíz} del JDK: aquel que contiene
+las carpetas \texttt{bin}, \texttt{lib} y \texttt{conf}. No al ejecutable, ni al
+subdirectorio \texttt{bin}.
+
+\begin{lstlisting}[language=bash,caption={Localización del directorio raíz del JDK},morekeywords={readlink,which,dirname,ls,update-alternatives}]
+# Ruta real del compilador, resolviendo los enlaces simbolicos.
+# Devuelve algo como /usr/lib/jvm/java-21-openjdk-amd64/bin/javac
+readlink -f $(which javac)
+
+# Subir dos niveles desde el binario da el directorio raiz del JDK
+dirname $(dirname $(readlink -f $(which javac)))
+
+# Contenido del directorio: deben aparecer bin, lib y conf
+ls /usr/lib/jvm/
+ls /usr/lib/jvm/java-21-openjdk-amd64/
+\end{lstlisting}
+
+En Ubuntu la ruta resultante es \texttt{/usr/lib/jvm/java-21-openjdk-amd64}.
+
+\evidencia{09-ruta-jdk.png}{Identificación del directorio raíz de la instalación del JDK}{ruta-jdk}
+
+\subsubsection{Definición de las variables}
+
+Hay que decidir el alcance de la configuración, y la elección tiene consecuencias:
+
+\rowcolors{2}{rowblue}{white}
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{4pt}
+
+\begin{longtable}{|>{\raggedright\arraybackslash}p{3.2cm}|>{\raggedright\arraybackslash}p{2.6cm}|>{\raggedright\arraybackslash}p{8.4cm}|}
+	\caption{Archivos donde puede definirse \texttt{JAVA\_HOME} y su alcance}
+	\label{tab:alcance} \\
+	\hline
+	\rowcolor{headerblue}
+	\headercell{Archivo} & \headercell{Alcance} & \headercell{Cuándo conviene} \\
+	\hline
+	\endfirsthead
+	\hline
+	\rowcolor{headerblue}
+	\headercell{Archivo} & \headercell{Alcance} & \headercell{Cuándo conviene} \\
+	\hline
+	\endhead
+
+	\texttt{\textasciitilde/.bashrc} & Un usuario, solo en terminales interactivas &
+	Es el caso más común en un equipo personal. No lo leen los servicios del sistema ni,
+	en algunas configuraciones, las aplicaciones lanzadas desde el menú gráfico. \\ \hline
+	\texttt{\textasciitilde/.profile} & Un usuario, también en la sesión gráfica &
+	Cuando se necesita que los programas abiertos desde el escritorio —un IDE, por
+	ejemplo— también vean la variable. \\ \hline
+	\texttt{/etc/environment} & Todo el sistema & Equipos con varios usuarios. No admite
+	sustituciones ni la sintaxis \texttt{export}: solo pares \texttt{CLAVE=valor}. \\ \hline
+	\texttt{/etc/profile.d/*.sh} & Todo el sistema & La opción más limpia para el
+	alcance global: es un archivo aparte y no se pierde al actualizar el sistema. \\ \hline
+\end{longtable}
+
+\normalsize
+\setlength{\tabcolsep}{6pt}
+
+En este reporte se configuró a nivel de usuario, editando \texttt{\textasciitilde/.bashrc}:
+
+\begin{lstlisting}[language=bash,caption={Definición de \texttt{JAVA\_HOME} y ampliación del \texttt{PATH}},morekeywords={nano,export,cat,tee,source}]
+nano ~/.bashrc
+\end{lstlisting}
+
+Y agregando al final del archivo:
+
+\begin{lstlisting}[language=bash,caption={Líneas añadidas a \textasciitilde/.bashrc},morekeywords={export}]
+# --- Configuracion de Java ---
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export PATH=$JAVA_HOME/bin:$PATH
+\end{lstlisting}
+
+Dos observaciones sobre estas dos líneas:
+
+\begin{itemize}
+	\item \texttt{PATH} se \textbf{amplía}, no se reemplaza. La parte \texttt{:\$PATH}
+	al final conserva todo lo que ya había. Omitirla deja la sesión sin acceso a
+	\texttt{ls}, \texttt{cd} ni ningún otro comando, y es uno de los errores más
+	desconcertantes que pueden cometerse en este paso.
+	\item El directorio del JDK se coloca \textbf{al principio} del \texttt{PATH}, de
+	modo que si hubiera otra versión de Java en el sistema, esta tenga precedencia.
+\end{itemize}
+
+\evidencia{10-editar-bashrc.png}{Líneas agregadas al final de \texttt{\textasciitilde/.bashrc}}{editar-bashrc}
+
+\subsubsection{Aplicación y verificación}
+
+Un archivo de configuración editado no surte efecto en la terminal que ya estaba
+abierta: hay que releerlo o abrir una terminal nueva.
+
+\begin{lstlisting}[language=bash,caption={Aplicación y comprobación de las variables},morekeywords={source,echo,ls}]
+# Relee el archivo en la terminal actual
+source ~/.bashrc
+
+# La variable debe mostrar la ruta del JDK
+echo $JAVA_HOME
+
+# El directorio del JDK debe aparecer al inicio del PATH
+echo $PATH
+
+# Prueba definitiva: invocar el binario a traves de la variable
+$JAVA_HOME/bin/java -version
+$JAVA_HOME/bin/javac -version
+\end{lstlisting}
+
+La última comprobación es la más significativa del reporte: si
+\texttt{\$JAVA\_HOME/bin/java} responde con la versión, entonces la variable apunta a un
+directorio válido. Si responde \texttt{No such file or directory}, la ruta está mal
+escrita o apunta a un nivel equivocado del árbol de directorios.
+
+\evidencia{11-java-home-configurado.png}{Variables \texttt{JAVA\_HOME} y \texttt{PATH} configuradas y verificadas}{java-home-configurado}
+
+\subsubsection{Gestión de varias versiones instaladas}
+
+Cuando conviven varios JDK, Debian y Ubuntu resuelven cuál responde mediante el sistema
+de alternativas:
+
+\begin{lstlisting}[language=bash,caption={Selección de la versión activa},morekeywords={sudo,update-alternatives,config,list,java,javac}]
+# Versiones registradas en el sistema
+update-alternatives --list java
+
+# Menu interactivo para elegir cual sera la predeterminada
+sudo update-alternatives --config java
+sudo update-alternatives --config javac
+\end{lstlisting}
+
+Conviene entender que \texttt{update-alternatives} y \texttt{JAVA\_HOME} son mecanismos
+\textbf{independientes}: el primero decide qué binario responde al escribir
+\texttt{java} en la terminal; el segundo, qué JDK usan Maven, Gradle o el IDE. Pueden
+apuntar a versiones distintas sin que el sistema se queje, y esa discrepancia silenciosa
+explica buena parte de los problemas de compilación difíciles de diagnosticar.
+
+\evidencia{12-alternatives.png}{Versiones registradas en el sistema de alternativas}{alternatives}
+
+% =====================================================================
+\subsection{Fase 5: verificación funcional}
+% =====================================================================
+
+Que los comandos reporten una versión no demuestra que el kit funcione. La prueba real
+es compilar y ejecutar un programa.
+
+\begin{lstlisting}[language=bash,caption={Creación del programa de prueba},morekeywords={mkdir,cd,cat,nano}]
+mkdir -p ~/pruebaJava && cd ~/pruebaJava
+nano HolaMundo.java
+\end{lstlisting}
+
+\begin{lstlisting}[caption={Programa de prueba (\texttt{HolaMundo.java})}]
+public class HolaMundo {
+    public static void main(String[] args) {
+        System.out.println("El JDK quedo instalado correctamente.");
+        System.out.println("Version de Java : " + System.getProperty("java.version"));
+        System.out.println("Proveedor       : " + System.getProperty("java.vendor"));
+        System.out.println("Directorio home : " + System.getProperty("java.home"));
+    }
+}
+\end{lstlisting}
+
+El programa no se limita a imprimir un saludo: consulta las propiedades del sistema para
+que la salida muestre qué JDK está ejecutándolo realmente. El valor de
+\texttt{java.home} debe coincidir con el de \texttt{JAVA\_HOME}; si no coincide, algo de
+la configuración quedó inconsistente.
+
+\evidencia{13-holamundo-codigo.png}{Código fuente del programa de prueba}{holamundo-codigo}
+
+\begin{lstlisting}[language=bash,caption={Compilación y ejecución},morekeywords={javac,java,ls}]
+# Compilar: genera HolaMundo.class
+javac HolaMundo.java
+
+# Verificar que se creo el bytecode
+ls -l
+
+# Ejecutar (sin la extension .class)
+java HolaMundo
+\end{lstlisting}
+
+\evidencia{14-holamundo-ejecucion.png}{Compilación y ejecución del programa de prueba}{holamundo-ejecucion}
+
+Con esta última evidencia queda demostrado el ciclo completo: el código fuente se
+compiló a \textit{bytecode} con \texttt{javac} y la JVM lo ejecutó, usando el JDK
+señalado por \texttt{JAVA\_HOME}.

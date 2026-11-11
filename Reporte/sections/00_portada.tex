@@ -1,0 +1,53 @@
+% =========================
+% PORTADA
+% =========================
+\begin{titlepage}
+	\thispagestyle{empty}
+	\centering
+
+	\begin{tikzpicture}[remember picture, overlay]
+		\node[anchor=north]
+		at ([xshift=1.60cm, yshift=-1.25cm]current page.north west) {
+			\includegraphics[width=2.25cm]{images/ipn.png}
+		};
+		\foreach \x in {1.45,1.60,1.75} {
+			\draw[azulESCOM, line width=1.5pt]
+			([xshift=\x cm, yshift=-3.85cm]current page.north west) --
+			([xshift=\x cm, yshift=4.20cm]current page.south west);
+		}
+		\node[anchor=south]
+		at ([xshift=1.60cm, yshift=2.0cm]current page.south west) {
+			\includegraphics[width=2.45cm]{images/ESCOM.png}
+		};
+	\end{tikzpicture}
+
+	\vspace*{0.9cm}
+
+	{\fontsize{20}{24}\selectfont \textbf{INSTITUTO POLITÉCNICO NACIONAL}}\\[0.35cm]
+	{\fontsize{16}{19.2}\selectfont \textbf{ESCUELA SUPERIOR DE CÓMPUTO}}\\[0.55cm]
+	{\fontsize{20}{24}\selectfont \textbf{ESCOM}}\\[1.4cm]
+
+	{\fontsize{15}{18}\selectfont \textbf{Des. de Aplicaciones Web:}}\\[0.25cm]
+	{\fontsize{15}{18}\selectfont \textbf{Client and Backend Development Frameworks}}\\[1.3cm]
+
+	{\fontsize{14}{16.8}\selectfont \textit{Reporte de práctica}}\\[0.7cm]
+
+	{\fontsize{20}{24}\selectfont \bfseries
+		``Instalación del\\[0.2cm] Java Development Kit''
+	}\\[3.5cm]
+
+	{\fontsize{14}{16.8}\selectfont \textit{Alumno}}\\[0.35cm]
+	{\fontsize{14}{16.8}\selectfont \textbf{José Bryan Omar Jiménez Velázquez}}\\[0.85cm]
+
+	{\fontsize{14}{16.8}\selectfont \textit{Grupo}}\\[0.35cm]
+	{\fontsize{14}{16.8}\selectfont \textbf{7CM2}}\\[0.85cm]
+
+	{\fontsize{14}{16.8}\selectfont \textit{Profesor}}\\[0.35cm]
+	{\fontsize{14}{16.8}\selectfont \textbf{Dr. José Asunción Enríquez Zárate}}
+
+	\vfill
+
+	{\fontsize{12}{14.4}\selectfont Ciudad de México, agosto de 2026}\\[0.35cm]
+	{\fontsize{10}{12}\selectfont \texttt{josebryanomar2004@gmail.com}}
+
+\end{titlepage}
