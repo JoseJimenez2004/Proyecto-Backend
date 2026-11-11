@@ -1,0 +1,37 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: auth-service
+  # Temporal: H2 en memoria (se reinicia en cada arranque). Pendiente: PostgreSQL + Flyway.
+  datasource:
+    url: jdbc:h2:mem:auth;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
+
+seguridad:
+  jwt:
+    # Debe ser EL MISMO valor en auth, catalogos e inventario. En producción, por variable de entorno.
+    secreto: ${JWT_SECRET:desarrollo-escom-inventario-cambiar-este-secreto-2026}
+    emisor: inventario-escom
+    expiracion-minutos: 480
+  rutas-publicas:
+    - /api/auth/login
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

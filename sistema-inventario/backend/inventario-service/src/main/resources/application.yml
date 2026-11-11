@@ -1,0 +1,42 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: inventario-service
+  # Temporal: H2 en memoria con los equipos de prueba del Avance 1 (data.sql).
+  datasource:
+    url: jdbc:h2:mem:inventario;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    defer-datasource-initialization: true
+  sql:
+    init:
+      mode: always
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
+
+seguridad:
+  jwt:
+    secreto: ${JWT_SECRET:desarrollo-escom-inventario-cambiar-este-secreto-2026}
+    emisor: inventario-escom
+    expiracion-minutos: 480
+
+# Nombre con el que catalogos-service está registrado en Eureka
+servicios:
+  catalogos-url: http://catalogos-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

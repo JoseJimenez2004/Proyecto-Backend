@@ -1,0 +1,17 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: discovery-server
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    # El propio servidor no se registra ni descarga el registro
+    register-with-eureka: false
+    fetch-registry: false
+  server:
+    # En desarrollo conviene desactivarlo para que los servicios caídos desaparezcan rápido
+    enable-self-preservation: false
