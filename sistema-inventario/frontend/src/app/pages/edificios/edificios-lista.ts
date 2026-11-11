@@ -1,57 +1,98 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
 import { mensajeError } from '../../core/errores';
 import { Edificio } from '../../core/models';
+import { Icono } from '../../shared/icono';
 
 @Component({
   selector: 'app-edificios-lista',
-  imports: [RouterLink],
+  imports: [RouterLink, FormsModule, Icono],
   template: `
-    <div class="barra">
-      <h1>Edificios y espacios</h1>
-      <span class="espacio"></span>
+    <header class="pagina-encabezado">
+      <div>
+        <div class="migas">Catálogos</div>
+        <h1>Edificios y espacios</h1>
+        <p>Laboratorios, cubículos, aulas y oficinas donde se ubica el equipo.</p>
+      </div>
       @if (esAdmin) {
-        <a class="boton" routerLink="/edificios/nuevo">+ Nuevo espacio</a>
+        <a class="btn btn-primario" routerLink="/edificios/nuevo"><app-icono nombre="mas" /> Nuevo espacio</a>
       }
-    </div>
+    </header>
 
-    @if (error()) {
-      <div class="alerta error">{{ error() }}</div>
+    @if (!esAdmin) {
+      <div class="alerta alerta-info"><app-icono nombre="escudo" />
+        <span>Los catálogos solo los modifica el administrador. Tu rol puede consultarlos.</span></div>
     }
 
-    <table>
-      <thead>
-        <tr>
-          <th>Clave</th><th>Nombre</th><th>Tipo</th><th>Ubicación</th><th>Niveles</th><th>Estado</th>
-          @if (esAdmin) { <th></th> }
-        </tr>
-      </thead>
-      <tbody>
-        @for (e of edificios(); track e.id) {
-          <tr>
-            <td><strong>{{ e.clave }}</strong></td>
-            <td>{{ e.nombre }}</td>
-            <td>{{ e.tipoEspacio }}</td>
-            <td>{{ e.direccion ?? '—' }}</td>
-            <td>{{ e.numeroNiveles ?? '—' }}</td>
-            <td>
-              <span class="etiqueta" [class.verde]="e.activo">{{ e.activo ? 'En uso' : 'Inactivo' }}</span>
-            </td>
-            @if (esAdmin) {
-              <td class="acciones">
-                <a class="boton secundario chico" [routerLink]="['/edificios', e.id]">Editar</a>
-                <button class="peligro chico" (click)="eliminar(e)">Eliminar</button>
-              </td>
+    @if (error()) {
+      <div class="alerta alerta-error"><app-icono nombre="alerta" /><span>{{ error() }}</span></div>
+    }
+
+    <section class="panel">
+      <div class="panel-encabezado">
+        <div class="busqueda">
+          <app-icono nombre="buscar" />
+          <input class="control" placeholder="Buscar por clave o nombre" [(ngModel)]="filtro" />
+        </div>
+        <span class="espacio"></span>
+        <small>{{ filtrados().length }} de {{ edificios().length }} espacios</small>
+      </div>
+
+      <div class="tabla-contenedor">
+        <table class="tabla">
+          <thead>
+            <tr>
+              <th>Clave</th><th>Nombre</th><th>Tipo</th><th>Ubicación</th><th class="num">Niveles</th><th>Estado</th>
+              @if (esAdmin) { <th></th> }
+            </tr>
+          </thead>
+          <tbody>
+            @if (cargando()) {
+              @for (i of [1, 2, 3]; track i) {
+                <tr><td colspan="7"><div class="esqueleto"></div></td></tr>
+              }
+            } @else {
+              @for (e of filtrados(); track e.id) {
+                <tr>
+                  <td><span class="clave">{{ e.clave }}</span></td>
+                  <td><strong>{{ e.nombre }}</strong></td>
+                  <td>{{ e.tipoEspacio }}</td>
+                  <td>{{ e.direccion ?? '—' }}</td>
+                  <td class="num">{{ e.numeroNiveles ?? '—' }}</td>
+                  <td>
+                    <span class="insignia" [class.exito]="e.activo">{{ e.activo ? 'En uso' : 'Inactivo' }}</span>
+                  </td>
+                  @if (esAdmin) {
+                    <td class="acciones">
+                      <a class="btn btn-fantasma btn-icono" title="Editar" [routerLink]="['/edificios', e.id]">
+                        <app-icono nombre="editar" />
+                      </a>
+                      <button class="btn btn-fantasma btn-icono peligro" title="Eliminar" (click)="eliminar(e)">
+                        <app-icono nombre="eliminar" />
+                      </button>
+                    </td>
+                  }
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7">
+                    <div class="vacio">
+                      <app-icono nombre="edificio" />
+                      <strong>No hay espacios que coincidan</strong>
+                      <span>Prueba con otra búsqueda o registra un espacio nuevo.</span>
+                    </div>
+                  </td>
+                </tr>
+              }
             }
-          </tr>
-        } @empty {
-          <tr><td colspan="7" class="vacio">{{ cargando() ? 'Cargando…' : 'No hay espacios registrados' }}</td></tr>
-        }
-      </tbody>
-    </table>
+          </tbody>
+        </table>
+      </div>
+    </section>
   `,
 })
 export class EdificiosLista implements OnInit {
@@ -61,6 +102,17 @@ export class EdificiosLista implements OnInit {
   protected readonly edificios = signal<Edificio[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal<string | null>(null);
+
+  private readonly texto = signal('');
+  protected get filtro(): string { return this.texto(); }
+  protected set filtro(v: string) { this.texto.set(v); }
+
+  protected readonly filtrados = computed(() => {
+    const t = this.texto().trim().toLowerCase();
+    return t
+      ? this.edificios().filter((e) => e.clave.toLowerCase().includes(t) || e.nombre.toLowerCase().includes(t))
+      : this.edificios();
+  });
 
   ngOnInit(): void {
     this.cargar();

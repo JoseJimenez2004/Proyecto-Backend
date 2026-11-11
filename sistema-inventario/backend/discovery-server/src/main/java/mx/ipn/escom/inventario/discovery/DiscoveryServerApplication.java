@@ -7,7 +7,7 @@ import org.springframework.cloud.netflix.eureka.server.EnableEurekaServer;
 /**
  * Servidor de descubrimiento. Cada microservicio se registra aquí con su nombre
  * (auth-service, catalogos-service, ...) y el gateway los localiza por ese nombre.
- * Panel: http://localhost:8761
+ * Panel: http://localhost:18761
  */
 @SpringBootApplication
 @EnableEurekaServer

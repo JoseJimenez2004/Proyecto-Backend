@@ -1,0 +1,21 @@
+# Perfil "postgres": se activa con SPRING_PROFILES_ACTIVE=postgres (así corren los contenedores de compose.yaml).
+# El esquema lo crea Flyway con src/main/resources/db/migration y Hibernate solo lo valida.
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:inventario_catalogos}
+    username: ${DB_USER:inventario}
+    password: ${DB_PASSWORD:inventario123}
+  flyway:
+    enabled: true
+  jpa:
+    # Con Flyway NO se debe diferir la inicialización (provoca una dependencia circular
+    # flyway <-> entityManagerFactory y el servicio no arranca). data.sql solo se usa con H2.
+    defer-datasource-initialization: false
+    hibernate:
+      ddl-auto: validate
+  sql:
+    init:
+      mode: never
+  h2:
+    console:
+      enabled: false

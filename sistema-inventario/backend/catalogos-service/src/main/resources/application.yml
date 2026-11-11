@@ -1,15 +1,23 @@
 server:
-  port: 8082
+  port: 18082
 
 spring:
   application:
     name: catalogos-service
-  # Temporal: H2 en memoria con los datos de prueba del Avance 1 (data.sql).
-  # Pendiente: PostgreSQL + Flyway con el script DDL del Avance 1.
+  # Datos de prueba del Avance 1 en src/main/resources/data.sql
   datasource:
+    # H2 en memoria: se crea al arrancar y se borra al detener el servicio.
+    # Consola: http://localhost:<puerto>/h2-console  ·  JDBC URL: jdbc:h2:mem:catalogos  ·  usuario: sa  ·  sin contraseña
     url: jdbc:h2:mem:catalogos;DB_CLOSE_DELAY=-1
     username: sa
     password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  # Flyway solo se usa con PostgreSQL (perfil postgres); con H2 las tablas las crea Hibernate.
+  flyway:
+    enabled: false
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -23,7 +31,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+      defaultZone: ${EUREKA_URL:http://localhost:18761/eureka}
   instance:
     prefer-ip-address: true
 
@@ -32,6 +40,8 @@ seguridad:
     secreto: ${JWT_SECRET:desarrollo-escom-inventario-cambiar-este-secreto-2026}
     emisor: inventario-escom
     expiracion-minutos: 480
+  rutas-publicas:
+    - /h2-console/**
 
 management:
   endpoints:

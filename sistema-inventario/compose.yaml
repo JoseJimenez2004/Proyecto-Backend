@@ -1,0 +1,216 @@
+# =====================================================================
+# Sistema de Inventario ESCOM: 7 contenedores
+#   postgres · discovery-server · auth-service · catalogos-service
+#   inventario-service · api-gateway · frontend
+#
+#   cp .env.example .env            (opcional: sin .env se usan los valores por defecto)
+#   podman-compose up -d --build    (o: docker compose up -d --build)
+#
+# Los contenedores se comunican por NOMBRE DE SERVICIO en la red del proyecto
+# (postgres, discovery-server, api-gateway...), no por localhost.
+# =====================================================================
+name: proyecto-backend
+
+services:
+
+  # ------------------------------------------------------------ Base de datos
+  postgres:
+    build:
+      context: ./config-files/postgres
+      args:
+        POSTGRES_VERSION: ${POSTGRES_VERSION:-17}
+    image: localhost/inventario-postgres:latest
+    container_name: inventario-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-inventario}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-inventario123}
+      BASES_DATOS: inventario_auth,inventario_catalogos,inventario_equipos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${PUERTO_POSTGRES:-15432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-inventario} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: on-failure
+
+  # ------------------------------------------------------------ Registro de servicios
+  discovery-server:
+    build:
+      context: ./backend
+      args:
+        SERVICIO: discovery-server
+        JAVA_VERSION: ${JAVA_VERSION:-21}
+    image: localhost/inventario-discovery-server:latest
+    container_name: inventario-discovery-server
+    environment:
+      SERVER_PORT: ${PUERTO_EUREKA:-18761}
+      JAVA_OPTS: ${JAVA_OPTS:--Xms64m -Xmx384m -XX:+UseSerialGC}
+    ports:
+      - "${PUERTO_EUREKA:-18761}:${PUERTO_EUREKA:-18761}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${PUERTO_EUREKA:-18761}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      start_period: 40s
+      retries: 15
+    restart: on-failure
+
+  # ------------------------------------------------------------ Microservicios
+  auth-service:
+    build:
+      context: ./backend
+      args:
+        SERVICIO: auth-service
+        JAVA_VERSION: ${JAVA_VERSION:-21}
+    image: localhost/inventario-auth-service:latest
+    container_name: inventario-auth-service
+    environment:
+      SERVER_PORT: ${PUERTO_AUTH:-18081}
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: inventario_auth
+      DB_USER: ${DB_USER:-inventario}
+      DB_PASSWORD: ${DB_PASSWORD:-inventario123}
+      JWT_SECRET: ${JWT_SECRET:-cambia-este-secreto-por-uno-largo-de-al-menos-32-caracteres}
+      EUREKA_URL: http://discovery-server:${PUERTO_EUREKA:-18761}/eureka
+      JAVA_OPTS: ${JAVA_OPTS:--Xms64m -Xmx384m -XX:+UseSerialGC}
+    ports:
+      - "${PUERTO_AUTH:-18081}:${PUERTO_AUTH:-18081}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${PUERTO_AUTH:-18081}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 15
+    restart: on-failure
+
+  catalogos-service:
+    build:
+      context: ./backend
+      args:
+        SERVICIO: catalogos-service
+        JAVA_VERSION: ${JAVA_VERSION:-21}
+    image: localhost/inventario-catalogos-service:latest
+    container_name: inventario-catalogos-service
+    environment:
+      SERVER_PORT: ${PUERTO_CATALOGOS:-18082}
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: inventario_catalogos
+      DB_USER: ${DB_USER:-inventario}
+      DB_PASSWORD: ${DB_PASSWORD:-inventario123}
+      JWT_SECRET: ${JWT_SECRET:-cambia-este-secreto-por-uno-largo-de-al-menos-32-caracteres}
+      EUREKA_URL: http://discovery-server:${PUERTO_EUREKA:-18761}/eureka
+      JAVA_OPTS: ${JAVA_OPTS:--Xms64m -Xmx384m -XX:+UseSerialGC}
+    ports:
+      - "${PUERTO_CATALOGOS:-18082}:${PUERTO_CATALOGOS:-18082}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${PUERTO_CATALOGOS:-18082}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 15
+    restart: on-failure
+
+  inventario-service:
+    build:
+      context: ./backend
+      args:
+        SERVICIO: inventario-service
+        JAVA_VERSION: ${JAVA_VERSION:-21}
+    image: localhost/inventario-inventario-service:latest
+    container_name: inventario-inventario-service
+    environment:
+      SERVER_PORT: ${PUERTO_INVENTARIO:-18083}
+      SPRING_PROFILES_ACTIVE: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: inventario_equipos
+      DB_USER: ${DB_USER:-inventario}
+      DB_PASSWORD: ${DB_PASSWORD:-inventario123}
+      JWT_SECRET: ${JWT_SECRET:-cambia-este-secreto-por-uno-largo-de-al-menos-32-caracteres}
+      EUREKA_URL: http://discovery-server:${PUERTO_EUREKA:-18761}/eureka
+      JAVA_OPTS: ${JAVA_OPTS:--Xms64m -Xmx384m -XX:+UseSerialGC}
+    ports:
+      - "${PUERTO_INVENTARIO:-18083}:${PUERTO_INVENTARIO:-18083}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${PUERTO_INVENTARIO:-18083}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 15
+    restart: on-failure
+
+  # ------------------------------------------------------------ Puerta de entrada
+  api-gateway:
+    build:
+      context: ./backend
+      args:
+        SERVICIO: api-gateway
+        JAVA_VERSION: ${JAVA_VERSION:-21}
+    image: localhost/inventario-api-gateway:latest
+    container_name: inventario-api-gateway
+    environment:
+      SERVER_PORT: ${PUERTO_GATEWAY:-18090}
+      EUREKA_URL: http://discovery-server:${PUERTO_EUREKA:-18761}/eureka
+      JAVA_OPTS: ${JAVA_OPTS:--Xms64m -Xmx384m -XX:+UseSerialGC}
+    ports:
+      - "${PUERTO_GATEWAY:-18090}:${PUERTO_GATEWAY:-18090}"
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      catalogos-service:
+        condition: service_healthy
+      inventario-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:${PUERTO_GATEWAY:-18090}/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      start_period: 40s
+      retries: 15
+    restart: on-failure
+
+  # ------------------------------------------------------------ Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NODE_VERSION: ${NODE_VERSION:-24}
+    image: localhost/inventario-frontend:latest
+    container_name: inventario-frontend
+    environment:
+      PUERTO_FRONTEND: ${PUERTO_FRONTEND:-18200}
+      GATEWAY_URL: http://api-gateway:${PUERTO_GATEWAY:-18090}
+    ports:
+      - "${PUERTO_FRONTEND:-18200}:${PUERTO_FRONTEND:-18200}"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  pgdata:

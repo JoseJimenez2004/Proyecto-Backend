@@ -5,57 +5,81 @@ import { Router, RouterLink } from '@angular/router';
 import { CatalogosService } from '../../core/catalogos.service';
 import { mensajeError } from '../../core/errores';
 import { EdificioRequest, TIPOS_ESPACIO } from '../../core/models';
+import { Icono } from '../../shared/icono';
 
 @Component({
   selector: 'app-edificio-form',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, Icono],
   template: `
-    <h1>{{ id() ? 'Editar espacio' : 'Nuevo espacio' }}</h1>
+    <header class="pagina-encabezado">
+      <div>
+        <div class="migas"><a routerLink="/edificios">Edificios y espacios</a> / {{ id() ? 'Editar' : 'Nuevo' }}</div>
+        <h1>{{ id() ? 'Editar espacio' : 'Nuevo espacio' }}</h1>
+        <p>Los campos marcados con * son obligatorios.</p>
+      </div>
+    </header>
 
     @if (error()) {
-      <div class="alerta error">{{ error() }}</div>
+      <div class="alerta alerta-error"><app-icono nombre="alerta" /><span>{{ error() }}</span></div>
     }
 
-    <form class="tarjeta" [formGroup]="form" (ngSubmit)="guardar()">
-      <div class="rejilla">
-        <div class="campo">
-          <label for="clave">Clave *</label>
-          <input id="clave" formControlName="clave" maxlength="10" placeholder="LAB-C1" />
-          @if (form.controls.clave.touched && form.controls.clave.invalid) {
-            <div class="error">Obligatoria, máximo 10 caracteres</div>
-          }
+    <form class="panel" [formGroup]="form" (ngSubmit)="guardar()">
+      <section class="form-seccion">
+        <div>
+          <h2>Identificación</h2>
+          <p>Clave institucional corta y nombre completo del espacio.</p>
         </div>
-        <div class="campo">
-          <label for="nombre">Nombre *</label>
-          <input id="nombre" formControlName="nombre" maxlength="80" />
-          @if (form.controls.nombre.touched && form.controls.nombre.invalid) {
-            <div class="error">Obligatorio</div>
-          }
-        </div>
-        <div class="campo">
-          <label for="tipo">Tipo de espacio *</label>
-          <select id="tipo" formControlName="tipoEspacio">
-            @for (t of tipos; track t) {
-              <option [value]="t">{{ t }}</option>
+        <div class="rejilla-campos">
+          <div class="campo">
+            <label for="clave">Clave *</label>
+            <input id="clave" formControlName="clave" maxlength="10" placeholder="LAB-C1" />
+            @if (form.controls.clave.touched && form.controls.clave.invalid) {
+              <span class="error">Obligatoria, máximo 10 caracteres</span>
             }
-          </select>
+          </div>
+          <div class="campo">
+            <label for="tipo">Tipo de espacio *</label>
+            <select id="tipo" formControlName="tipoEspacio">
+              @for (t of tipos; track t) { <option [value]="t">{{ t }}</option> }
+            </select>
+          </div>
+          <div class="campo completo">
+            <label for="nombre">Nombre *</label>
+            <input id="nombre" formControlName="nombre" maxlength="80" placeholder="Laboratorio de Cómputo 1" />
+            @if (form.controls.nombre.touched && form.controls.nombre.invalid) {
+              <span class="error">Obligatorio</span>
+            }
+          </div>
         </div>
-        <div class="campo">
-          <label for="niveles">Número de niveles</label>
-          <input id="niveles" type="number" min="1" formControlName="numeroNiveles" />
-        </div>
-        <div class="campo" style="grid-column: 1 / -1">
-          <label for="direccion">Dirección / referencia</label>
-          <input id="direccion" formControlName="direccion" maxlength="150" />
-        </div>
-        <div class="campo">
-          <label><input type="checkbox" formControlName="activo" /> Espacio en uso</label>
-        </div>
-      </div>
+      </section>
 
-      <div class="barra" style="margin-top: 1rem; margin-bottom: 0">
-        <button type="submit" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : 'Guardar' }}</button>
-        <a class="boton secundario" routerLink="/edificios">Cancelar</a>
+      <section class="form-seccion">
+        <div>
+          <h2>Ubicación</h2>
+          <p>Referencia dentro del campus y número de niveles del edificio.</p>
+        </div>
+        <div class="rejilla-campos">
+          <div class="campo completo">
+            <label for="direccion">Dirección / referencia <span class="opcional">(opcional)</span></label>
+            <input id="direccion" formControlName="direccion" maxlength="150" placeholder="Edificio C, planta baja" />
+          </div>
+          <div class="campo">
+            <label for="niveles">Número de niveles <span class="opcional">(opcional)</span></label>
+            <input id="niveles" type="number" min="1" formControlName="numeroNiveles" />
+            @if (form.controls.numeroNiveles.invalid) { <span class="error">Debe ser mayor a 0</span> }
+          </div>
+          <div class="campo">
+            <label>Estado</label>
+            <label class="casilla"><input type="checkbox" formControlName="activo" /> Espacio en uso</label>
+          </div>
+        </div>
+      </section>
+
+      <div class="form-acciones">
+        <a class="btn btn-secundario" routerLink="/edificios">Cancelar</a>
+        <button class="btn btn-primario" type="submit" [disabled]="guardando()">
+          {{ guardando() ? 'Guardando…' : 'Guardar espacio' }}
+        </button>
       </div>
     </form>
   `,

@@ -1,5 +1,5 @@
 server:
-  port: 8761
+  port: 18761
 
 spring:
   application:
@@ -15,3 +15,9 @@ eureka:
   server:
     # En desarrollo conviene desactivarlo para que los servicios caídos desaparezcan rápido
     enable-self-preservation: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

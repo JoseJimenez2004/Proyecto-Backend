@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  # Puertos del proyecto en el rango 18xxx para no chocar con Apache, Tomcat, XAMPP, etc.
+  port: ${GATEWAY_PORT:18090}
 
 spring:
   application:
@@ -23,12 +24,15 @@ spring:
                 - Path=/api/inventario/**
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
-          # CORS para el frontend en desarrollo (ng serve en el puerto 4200)
+          # CORS para el frontend en desarrollo. Se acepta cualquier puerto de localhost porque
+          # "ng serve" usa otro puerto si el 18200 está ocupado.
           globalcors:
             cors-configurations:
               '[/**]':
-                allowed-origins:
-                  - ${FRONTEND_URL:http://localhost:4200}
+                allowed-origin-patterns:
+                  - "http://localhost:*"
+                  - "http://127.0.0.1:*"
+                  - ${FRONTEND_URL:http://localhost:18200}
                 allowed-methods: [GET, POST, PUT, DELETE, OPTIONS]
                 allowed-headers: ["*"]
                 allow-credentials: true
@@ -37,7 +41,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+      defaultZone: ${EUREKA_URL:http://localhost:18761/eureka}
   instance:
     prefer-ip-address: true
 

@@ -12,6 +12,40 @@ export interface Usuario {
   roles: Rol[];
 }
 
+export interface UsuarioRequest {
+  username: string;
+  password: string | null;
+  nombreCompleto: string;
+  email: string;
+  idExperto: number | null;
+  roles: Rol[];
+  activo: boolean;
+}
+
+export interface Experto {
+  id: number;
+  numEmpleado: string;
+  primerNombre: string;
+  apellidoPaterno: string;
+  departamento: string;
+}
+
+/** Nombre y descripción de cada rol para mostrar en la interfaz. */
+export const ROLES: Record<Rol, { nombre: string; descripcion: string }> = {
+  ADMIN: {
+    nombre: 'Administrador',
+    descripcion: 'Acceso total: catálogos, inventario y usuarios del sistema.',
+  },
+  SOPORTE: {
+    nombre: 'Soporte técnico',
+    descripcion: 'Registra y actualiza computadoras. Consulta los catálogos.',
+  },
+  CONSULTA: {
+    nombre: 'Consulta',
+    descripcion: 'Solo lectura: consulta el inventario y los catálogos.',
+  },
+};
+
 export interface LoginResponse {
   token: string;
   tipo: string;

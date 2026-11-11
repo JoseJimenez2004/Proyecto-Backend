@@ -6,40 +6,50 @@ import { CatalogosService } from '../../core/catalogos.service';
 import { ComputadorasService } from '../../core/computadoras.service';
 import { mensajeError } from '../../core/errores';
 import { ComputadoraRequest, Distribuidor, ESTADOS_EQUIPO, Edificio, TIPOS_EQUIPO } from '../../core/models';
+import { Icono } from '../../shared/icono';
 
 @Component({
   selector: 'app-computadora-form',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, Icono],
   template: `
-    <h1>{{ id() ? 'Editar computadora' : 'Nueva computadora' }}</h1>
+    <header class="pagina-encabezado">
+      <div>
+        <div class="migas"><a routerLink="/computadoras">Computadoras</a> / {{ id() ? 'Editar' : 'Nueva' }}</div>
+        <h1>{{ id() ? 'Editar computadora' : 'Registrar computadora' }}</h1>
+        <p>Los campos marcados con * son obligatorios.</p>
+      </div>
+    </header>
 
     @if (error()) {
-      <div class="alerta error">{{ error() }}</div>
+      <div class="alerta alerta-error"><app-icono nombre="alerta" /><span>{{ error() }}</span></div>
     }
 
-    <form [formGroup]="form" (ngSubmit)="guardar()">
-      <div class="tarjeta">
-        <h2>Identificación</h2>
-        <div class="rejilla">
+    <form class="panel" [formGroup]="form" (ngSubmit)="guardar()">
+      <section class="form-seccion">
+        <div>
+          <h2>Identificación</h2>
+          <p>Número de la etiqueta institucional, datos del fabricante y situación del equipo.</p>
+        </div>
+        <div class="rejilla-campos">
           <div class="campo">
             <label for="inv">Número de inventario *</label>
             <input id="inv" formControlName="numInventario" maxlength="20" placeholder="ESCOM-00125" />
-            @if (invalido('numInventario')) { <div class="error">Obligatorio</div> }
+            @if (invalido('numInventario')) { <span class="error">Obligatorio</span> }
           </div>
           <div class="campo">
             <label for="serie">Número de serie *</label>
             <input id="serie" formControlName="numeroSerie" maxlength="50" />
-            @if (invalido('numeroSerie')) { <div class="error">Obligatorio</div> }
+            @if (invalido('numeroSerie')) { <span class="error">Obligatorio</span> }
           </div>
           <div class="campo">
             <label for="marca">Marca *</label>
-            <input id="marca" formControlName="marca" maxlength="50" />
-            @if (invalido('marca')) { <div class="error">Obligatoria</div> }
+            <input id="marca" formControlName="marca" maxlength="50" placeholder="Dell" />
+            @if (invalido('marca')) { <span class="error">Obligatoria</span> }
           </div>
           <div class="campo">
             <label for="modelo">Modelo *</label>
-            <input id="modelo" formControlName="modelo" maxlength="60" />
-            @if (invalido('modelo')) { <div class="error">Obligatorio</div> }
+            <input id="modelo" formControlName="modelo" maxlength="60" placeholder="OptiPlex 7420" />
+            @if (invalido('modelo')) { <span class="error">Obligatorio</span> }
           </div>
           <div class="campo">
             <label for="tipo">Tipo de equipo *</label>
@@ -54,18 +64,25 @@ import { ComputadoraRequest, Distribuidor, ESTADOS_EQUIPO, Edificio, TIPOS_EQUIP
             </select>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="tarjeta">
-        <h2>Hardware</h2>
-        <div class="rejilla">
-          <div class="campo">
+      <section class="form-seccion">
+        <div>
+          <h2>Hardware</h2>
+          <p>Características técnicas. Todos los campos son opcionales.</p>
+        </div>
+        <div class="rejilla-campos">
+          <div class="campo completo">
             <label for="cpu">Procesador</label>
-            <input id="cpu" formControlName="procesador" maxlength="80" />
+            <input id="cpu" formControlName="procesador" maxlength="80" placeholder="Intel Core i5-13500" />
           </div>
           <div class="campo">
             <label for="ram">Memoria RAM (GB)</label>
             <input id="ram" type="number" min="1" formControlName="memoriaRamGb" />
+          </div>
+          <div class="campo">
+            <label for="optica">Unidad óptica</label>
+            <input id="optica" formControlName="unidadOptica" maxlength="30" placeholder="DVD-RW" />
           </div>
           <div class="campo">
             <label for="disco">Disco principal (GB)</label>
@@ -75,28 +92,27 @@ import { ComputadoraRequest, Distribuidor, ESTADOS_EQUIPO, Edificio, TIPOS_EQUIP
             <label for="disco2">Segundo disco (GB)</label>
             <input id="disco2" type="number" min="1" formControlName="capacidadSegundoDiscoDuroGb" />
           </div>
-          <div class="campo">
-            <label for="optica">Unidad óptica</label>
-            <input id="optica" formControlName="unidadOptica" maxlength="30" placeholder="DVD-RW" />
-          </div>
         </div>
-      </div>
+      </section>
 
-      <div class="tarjeta">
-        <h2>Compra y garantía</h2>
-        <div class="rejilla">
-          <div class="campo">
+      <section class="form-seccion">
+        <div>
+          <h2>Compra y garantía</h2>
+          <p>Proveedor, costos y vigencia. La garantía no puede terminar antes de la fecha de compra.</p>
+        </div>
+        <div class="rejilla-campos">
+          <div class="campo completo">
             <label for="dist">Distribuidor *</label>
             <select id="dist" formControlName="idDistribuidor">
-              <option [ngValue]="null" disabled>Selecciona…</option>
+              <option [ngValue]="null" disabled>Selecciona un distribuidor…</option>
               @for (d of distribuidores(); track d.id) { <option [ngValue]="d.id">{{ d.nombre }}</option> }
             </select>
-            @if (invalido('idDistribuidor')) { <div class="error">Obligatorio</div> }
+            @if (invalido('idDistribuidor')) { <span class="error">Obligatorio</span> }
           </div>
           <div class="campo">
             <label for="fcompra">Fecha de compra *</label>
             <input id="fcompra" type="date" formControlName="fechaCompra" />
-            @if (invalido('fechaCompra')) { <div class="error">Obligatoria</div> }
+            @if (invalido('fechaCompra')) { <span class="error">Obligatoria</span> }
           </div>
           <div class="campo">
             <label for="fgarantia">Fin de garantía</label>
@@ -105,7 +121,7 @@ import { ComputadoraRequest, Distribuidor, ESTADOS_EQUIPO, Edificio, TIPOS_EQUIP
           <div class="campo">
             <label for="costo">Costo de adquisición (MXN) *</label>
             <input id="costo" type="number" min="0" step="0.01" formControlName="costoAdquisicion" />
-            @if (invalido('costoAdquisicion')) { <div class="error">Obligatorio, no negativo</div> }
+            @if (invalido('costoAdquisicion')) { <span class="error">Obligatorio, no negativo</span> }
           </div>
           <div class="campo">
             <label for="reemplazo">Costo de reemplazo (MXN)</label>
@@ -114,31 +130,37 @@ import { ComputadoraRequest, Distribuidor, ESTADOS_EQUIPO, Edificio, TIPOS_EQUIP
           <div class="campo">
             <label for="intervalo">Renovar cada (meses)</label>
             <input id="intervalo" type="number" min="1" formControlName="intervaloActualizacionMeses" />
+            <span class="ayuda">Plan de reemplazo del equipo.</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="tarjeta">
-        <h2>Ubicación</h2>
-        <div class="rejilla">
+      <section class="form-seccion">
+        <div>
+          <h2>Ubicación</h2>
+          <p>Espacio físico donde se encuentra el equipo.</p>
+        </div>
+        <div class="rejilla-campos">
           <div class="campo">
             <label for="edif">Edificio / espacio *</label>
             <select id="edif" formControlName="idEdificio">
-              <option [ngValue]="null" disabled>Selecciona…</option>
+              <option [ngValue]="null" disabled>Selecciona un espacio…</option>
               @for (e of edificios(); track e.id) { <option [ngValue]="e.id">{{ e.clave }} · {{ e.nombre }}</option> }
             </select>
-            @if (invalido('idEdificio')) { <div class="error">Obligatorio</div> }
+            @if (invalido('idEdificio')) { <span class="error">Obligatorio</span> }
           </div>
           <div class="campo">
             <label for="ubic">Ubicación específica</label>
             <input id="ubic" formControlName="ubicacionEspecifica" maxlength="60" placeholder="Mesa 1, lugar 3" />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="barra">
-        <button type="submit" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : 'Guardar' }}</button>
-        <a class="boton secundario" routerLink="/computadoras">Cancelar</a>
+      <div class="form-acciones">
+        <a class="btn btn-secundario" routerLink="/computadoras">Cancelar</a>
+        <button class="btn btn-primario" type="submit" [disabled]="guardando()">
+          {{ guardando() ? 'Guardando…' : 'Guardar computadora' }}
+        </button>
       </div>
     </form>
   `,

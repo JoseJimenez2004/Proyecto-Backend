@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { Distribuidor, Edificio, EdificioRequest } from './models';
+import { Distribuidor, Edificio, EdificioRequest, Experto } from './models';
 
 /** Llamadas a catalogos-service (a través del gateway: /api/catalogos/...). */
 @Injectable({ providedIn: 'root' })
@@ -32,5 +32,9 @@ export class CatalogosService {
 
   distribuidores(): Observable<Distribuidor[]> {
     return this.http.get<Distribuidor[]>(`${this.base}/distribuidores`);
+  }
+
+  expertos(): Observable<Experto[]> {
+    return this.http.get<Experto[]>(`${this.base}/expertos`);
   }
 }

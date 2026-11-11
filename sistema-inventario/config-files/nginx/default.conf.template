@@ -1,0 +1,38 @@
+# Plantilla de nginx del contenedor frontend.
+# Al arrancar, la imagen oficial de nginx reemplaza ${VARIABLE} con las variables
+# de entorno (PUERTO_FRONTEND, GATEWAY_URL) y genera /etc/nginx/conf.d/default.conf.
+# Las variables propias de nginx ($host, $uri...) no se tocan.
+server {
+    listen ${PUERTO_FRONTEND};
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # API -> contenedor api-gateway
+    location /api/ {
+        proxy_pass ${GATEWAY_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Archivos con hash en el nombre: caché larga
+    location ~* \.(?:js|css|woff2?|svg|png|ico)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # Rutas de Angular (SPA): cualquier otra ruta devuelve index.html
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /index.html;
+    }
+}

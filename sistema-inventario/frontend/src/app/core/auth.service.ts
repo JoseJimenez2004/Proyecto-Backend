@@ -3,7 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, map, tap } from 'rxjs';
 
-import { LoginResponse, Rol, Usuario } from './models';
+import { LoginResponse, ROLES, Rol, Usuario } from './models';
 
 interface Sesion {
   token: string;
@@ -43,6 +43,18 @@ export class AuthService {
   private readonly sesion = signal<Sesion | null>(leerSesion());
 
   readonly usuario = computed(() => this.sesion()?.usuario ?? null);
+
+  /** Rol con más privilegios del usuario (ADMIN > SOPORTE > CONSULTA). */
+  readonly rol = computed<Rol | null>(() => {
+    const roles = this.usuario()?.roles ?? [];
+    return (['ADMIN', 'SOPORTE', 'CONSULTA'] as Rol[]).find((r) => roles.includes(r)) ?? null;
+  });
+
+  /** Nombre y descripción del rol para mostrar en la interfaz. */
+  readonly infoRol = computed(() => {
+    const rol = this.rol();
+    return rol ? ROLES[rol] : null;
+  });
 
   token(): string | null {
     return this.sesion()?.token ?? null;

@@ -75,6 +75,8 @@ public class SecurityConfig {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            // La consola H2 (/h2-console) se dibuja con frames del mismo origen
+            .headers(h -> h.frameOptions(f -> f.sameOrigin()))
             .authorizeHttpRequests(auth -> {
                 auth.requestMatchers("/error", "/actuator/health/**", "/actuator/info").permitAll();
                 if (rutasPublicas.length > 0) {

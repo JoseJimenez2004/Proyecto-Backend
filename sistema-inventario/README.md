@@ -1,90 +1,205 @@
 # Sistema de Inventario y Gestión de Equipo de Cómputo (ESCOM)
 
 Proyecto final de *Web client and backend development frameworks* (7CM2).
-Arquitectura de **microservicios** con **Java 21 + Spring Boot 4** y frontend en **Angular 22**.
+Arquitectura de **microservicios** con **Java 21 + Spring Boot 4**, **PostgreSQL** y frontend en **Angular 22**.
 
-> **Estado:** primera iteración. La base de datos todavía es **H2 en memoria**: se crea al arrancar cada
-> servicio con los datos de prueba del Avance 1 y **se borra al detenerlo**. El cambio a **PostgreSQL**
-> está en "Pendientes".
+Hay dos formas de ejecutarlo:
+
+| Forma | Para qué | Necesitas |
+|---|---|---|
+| **Contenedores** (recomendada) | Probar el sistema completo, igual en cualquier máquina | `podman` y `podman-compose` |
+| **Local** | Programar y depurar desde el IDE | Java 21, Maven, Node 22.22.3+ |
 
 ---
 
 ## Índice
 
-1. [Comandos rápidos](#1-comandos-rápidos)
-2. [Arquitectura](#2-arquitectura)
-3. [Requisitos e instalación (Ubuntu)](#3-requisitos-e-instalación-ubuntu)
-4. [Compilar el backend](#4-compilar-el-backend)
-5. [Ejecutar el backend](#5-ejecutar-el-backend)
-6. [Ejecutar el frontend](#6-ejecutar-el-frontend)
-7. [Verificar que todo funciona](#7-verificar-que-todo-funciona)
-8. [Probar la API con curl](#8-probar-la-api-con-curl)
-9. [Detener el sistema](#9-detener-el-sistema)
-10. [Solución de problemas](#10-solución-de-problemas)
-11. [Endpoints](#11-endpoints)
-12. [Estructura del proyecto](#12-estructura-del-proyecto)
-13. [Decisiones de diseño](#13-decisiones-de-diseño)
-14. [Pendientes](#14-pendientes)
+1. [Inicio rápido con contenedores](#1-inicio-rápido-con-contenedores)
+2. [Comandos del día a día](#2-comandos-del-día-a-día)
+3. [Arquitectura](#3-arquitectura)
+4. [Configuración: `config-files/`, `.env` y Dockerfiles](#4-configuración-config-files-env-y-dockerfiles)
+5. [Base de datos](#5-base-de-datos)
+6. [Probar la API con curl](#6-probar-la-api-con-curl)
+7. [Modo local (sin contenedores)](#7-modo-local-sin-contenedores)
+8. [Solución de problemas](#8-solución-de-problemas)
+9. [Endpoints](#9-endpoints)
+10. [Estructura del proyecto](#10-estructura-del-proyecto)
+11. [Decisiones de diseño](#11-decisiones-de-diseño)
+12. [Pendientes](#12-pendientes)
 
 ---
 
-## 1. Comandos rápidos
+## 1. Inicio rápido con contenedores
 
-Si ya tienes Java 21, Maven y Node 22.22+ instalados:
+### Paso 1. Instalar Podman y podman-compose (solo la primera vez)
 
 ```bash
-# Desde la carpeta sistema-inventario/
-
-# Terminal 1: backend completo (compila y levanta los 5 servicios)
-./scripts/iniciar-backend.sh
-
-# Terminal 2: frontend
-cd frontend
-npm install        # solo la primera vez
-npm start
+sudo apt update
+sudo apt install -y podman podman-compose curl
+podman --version
+podman-compose --version
 ```
 
-Abre **http://localhost:4200** y entra con **`admin` / `Admin123!`**.
+> Se recomienda **podman-compose 1.1 o superior**, que respeta el orden de arranque por *healthchecks*.
+> Si `apt` instala una versión anterior, instala la más reciente así:
+> ```bash
+> sudo apt install -y pipx && pipx ensurepath && source ~/.bashrc
+> pipx install podman-compose
+> ```
+> Con versiones anteriores también funciona: los servicios se reinician solos hasta que PostgreSQL y Eureka están listos.
 
-Para detener el backend: `./scripts/detener-backend.sh`. Para detener el frontend: `Ctrl + C`.
+### Paso 2. Limpiar ejecuciones anteriores (solo si las hubo)
+
+```bash
+cd "~/Documents/Backen and Client/Proyecto-Backend/sistema-inventario"
+
+./scripts/detener-backend.sh 2>/dev/null       # backend en modo local
+podman pod rm -f proyecto-backend 2>/dev/null  # pod de la versión anterior con pod.sh
+podman volume rm proyecto-backend-pgdata 2>/dev/null
+# y Ctrl + C en cualquier terminal con "npm start"
+```
+
+### Paso 3. Crear el archivo de variables (opcional)
+
+```bash
+cp .env.example .env      # y edita .env si quieres cambiar puertos o contraseñas
+```
+
+Si no creas `.env`, se usan los valores por defecto (los mismos de `.env.example`).
+
+### Paso 4. Construir y levantar los 7 contenedores
+
+```bash
+podman-compose up -d --build
+```
+
+La primera vez tarda varios minutos: descarga las imágenes base y compila cada microservicio y el frontend.
+
+### Paso 5. Verificar y abrir
+
+```bash
+podman-compose ps          # todos deben estar "Up" y, tras ~1-2 min, "(healthy)"
+```
+
+Abre **http://localhost:18200** y entra con **`admin` / `Admin123!`**.
+
+| Qué | Dirección |
+|---|---|
+| Aplicación (frontend) | http://localhost:18200 |
+| API Gateway | http://localhost:18090 |
+| Eureka (servicios registrados) | http://localhost:18761 |
+| PostgreSQL | `localhost:15432` · usuario `inventario` · contraseña `inventario123` |
+
+### Usuarios de prueba y qué ve cada rol
+
+| Usuario | Contraseña | Rol |
+|---|---|---|
+| `admin` | `Admin123!` | Administrador |
+| `soporte` | `Soporte123!` | Soporte técnico |
+| `consulta` | `Consulta123!` | Consulta |
+
+| Pantalla / acción | Administrador | Soporte técnico | Consulta |
+|---|:-:|:-:|:-:|
+| Inicio con panel del rol y accesos rápidos | ✓ | ✓ | ✓ |
+| Ver computadoras y catálogos | ✓ | ✓ | ✓ |
+| Registrar y editar computadoras (menú *Registrar equipo*) | ✓ | ✓ | — |
+| Eliminar computadoras | ✓ | — | — |
+| Crear, editar y eliminar edificios | ✓ | — | — |
+| **Usuarios** (menú *Administración*): alta, edición, rol, activar/desactivar | ✓ | — | — |
+
+El menú lateral, el inicio y los botones cambian según el rol. Quien no puede modificar ve un aviso de
+"modo consulta". La seguridad real la aplica el backend (`@PreAuthorize`): aunque alguien escriba la URL a mano,
+el servidor responde 403.
 
 ---
 
-## 2. Arquitectura
+## 2. Comandos del día a día
+
+Todos se ejecutan desde la carpeta `sistema-inventario/`.
+
+```bash
+# Estado y logs
+podman-compose ps                                    # estado de los contenedores
+podman-compose logs -f auth-service                  # seguir el log de un servicio
+podman-compose logs --tail 100 inventario-service    # últimas 100 líneas
+
+# Después de cambiar código
+podman-compose up -d --build                         # reconstruye lo que cambió y reinicia
+podman-compose up -d --build catalogos-service       # reconstruir solo un servicio
+podman-compose up -d --build frontend                # reconstruir solo el frontend
+
+# Encender / apagar
+podman-compose stop                                  # detener (conserva contenedores y datos)
+podman-compose start                                 # volver a encender
+podman-compose restart api-gateway                   # reiniciar un servicio
+podman-compose down                                  # borrar contenedores (la base se conserva)
+podman-compose down -v                               # borrar contenedores Y la base (empezar de cero)
+
+# Entrar a un contenedor
+podman exec -it inventario-postgres psql -U inventario -d inventario_catalogos
+podman exec -it inventario-auth-service sh
+
+# Imágenes del proyecto
+podman images | grep inventario
+```
+
+Nombres de los servicios: `postgres`, `discovery-server`, `auth-service`, `catalogos-service`,
+`inventario-service`, `api-gateway`, `frontend`.
+
+> Con Podman 4.7 o superior también puedes escribir `podman compose` (con espacio) en lugar de `podman-compose`.
+
+---
+
+## 3. Arquitectura
+
+**Un contenedor por microservicio**, más uno para el frontend y otro para la base de datos (7 en total).
+Cada uno tiene su propia imagen.
 
 ```
-                     ┌──────────────────────┐
-  Angular 22  ─────► │  api-gateway  :8080  │  (Spring Cloud Gateway: enrutamiento y CORS)
-  (ng serve :4200)   └──────────┬───────────┘
-                                │ lb://nombre-servicio (resuelto con Eureka)
-        ┌───────────────────────┼─────────────────────────┐
-        ▼                       ▼                         ▼
-┌──────────────────┐  ┌───────────────────────┐  ┌─────────────────────────┐
-│ auth-service     │  │ catalogos-service     │◄─┤ inventario-service      │
-│ :8081            │  │ :8082                 │  │ :8083                   │
-│ usuario, rol     │  │ edificio_campus       │  │ computadora             │
-│ emite el JWT     │  │ distribuidor          │  │ (siguiente: software,   │
-│                  │  │ categoria_software    │  │  instalaciones,         │
-│                  │  │ departamento          │  │  mantenimiento,         │
-│                  │  │ experto_soporte       │  │  reportes)              │
-│                  │  │ sistema_operativo     │  │                         │
-└──────────────────┘  └───────────────────────┘  └─────────────────────────┘
-      BD auth              BD catalogos               BD inventario
+                       ┌─────────────────────────────┐
+  Navegador ─────────► │ frontend :18200             │  nginx + Angular
+                       │ (reenvía /api/ al gateway)  │
+                       └──────────────┬──────────────┘
+                                      ▼
+                       ┌─────────────────────────────┐
+                       │ api-gateway :18090          │  Spring Cloud Gateway
+                       └──────────────┬──────────────┘
+                                      │ lb://servicio (Eureka)
+          ┌───────────────────────────┼───────────────────────────┐
+          ▼                           ▼                           ▼
+┌───────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐
+│ auth-service      │   │ catalogos-service     │◄──┤ inventario-service    │
+│ :18081            │   │ :18082                │   │ :18083                │
+│ usuarios y roles  │   │ edificios, expertos,  │   │ computadoras          │
+│ emite el JWT      │   │ distribuidores, SO... │   │ (valida edificio y    │
+│                   │   │                       │   │  distribuidor)        │
+└─────────┬─────────┘   └───────────┬───────────┘   └───────────┬───────────┘
+          ▼                         ▼                           ▼
+  ┌───────────────────────────────────────────────────────────────────┐
+  │ postgres :5432  (en tu máquina :15432)                            │
+  │   inventario_auth  ·  inventario_catalogos  ·  inventario_equipos │
+  └───────────────────────────────────────────────────────────────────┘
 
-                     ┌──────────────────────────┐
-                     │ discovery-server :8761   │  (Eureka: registro de servicios)
-                     └──────────────────────────┘
+                       ┌─────────────────────────────┐
+                       │ discovery-server :18761     │  Eureka: registro de servicios
+                       └─────────────────────────────┘
 ```
 
-| Módulo | Puerto | Responsabilidad |
-|---|---|---|
-| `discovery-server` | 8761 | Registro Eureka. Panel en http://localhost:8761 |
-| `api-gateway` | 8080 | Entrada única: `/api/auth/**`, `/api/catalogos/**`, `/api/inventario/**` |
-| `auth-service` | 8081 | Usuarios, roles, login y emisión del JWT |
-| `catalogos-service` | 8082 | Los 6 catálogos del Avance 1 (CRUD completo) |
-| `inventario-service` | 8083 | Computadoras (CRUD y búsqueda paginada) |
-| `common` | — | Librería compartida: seguridad JWT y manejo de errores |
-| `frontend` | 4200 | Aplicación Angular |
+| Servicio (compose) | Contenedor | Imagen | Puerto |
+|---|---|---|---|
+| `postgres` | `inventario-postgres` | `inventario-postgres` | 15432 → 5432 |
+| `discovery-server` | `inventario-discovery-server` | `inventario-discovery-server` | 18761 |
+| `auth-service` | `inventario-auth-service` | `inventario-auth-service` | 18081 |
+| `catalogos-service` | `inventario-catalogos-service` | `inventario-catalogos-service` | 18082 |
+| `inventario-service` | `inventario-inventario-service` | `inventario-inventario-service` | 18083 |
+| `api-gateway` | `inventario-api-gateway` | `inventario-api-gateway` | 18090 |
+| `frontend` | `inventario-frontend` | `inventario-frontend` | 18200 |
+
+Los puertos están en el rango **18xxx** para no chocar con otros programas (Apache, Tomcat, XAMPP, otros
+proyectos que usan 8080/8081...).
+
+**Orden de arranque** (lo controla `compose.yaml` con `depends_on` y *healthchecks*):
+`postgres` → `discovery-server` → `auth`, `catalogos`, `inventario` → `api-gateway` → `frontend`.
 
 ### Versiones
 
@@ -93,260 +208,154 @@ Para detener el backend: `./scripts/detener-backend.sh`. Para detener el fronten
 | Java | 21 |
 | Spring Boot | 4.0.8 |
 | Spring Cloud | 2025.1.3 (Oakwood) |
-| Angular | 22 (requiere Node 22.22+ y TypeScript 6.0) |
-| Maven | 3.6.3 mínimo, 3.9+ recomendado |
+| PostgreSQL | 17 |
+| Angular | 22 (TypeScript 6.0, Node 22.22.3+) |
 
 ---
 
-## 3. Requisitos e instalación (Ubuntu)
+## 4. Configuración: `config-files/`, `.env` y Dockerfiles
 
-### 3.1 Java 21
+### 4.1 Dónde vive cada configuración
 
-```bash
-java -version            # debe decir 21
-javac -version           # debe decir 21
-echo $JAVA_HOME          # debe apuntar al JDK 21
-```
+| Qué | Dónde |
+|---|---|
+| Puertos, contraseñas, secreto JWT, memoria de la JVM | **`.env`** (a partir de `.env.example`) |
+| Qué contenedores hay y cómo se conectan | **`compose.yaml`** |
+| Configuración de PostgreSQL (imagen + script que crea las bases) | **`config-files/postgres/`** |
+| Configuración de nginx (plantilla con variables) | **`config-files/nginx/`** |
+| Valores por defecto de cada microservicio | `backend/<servicio>/src/main/resources/application.yml` |
+| Ajustes para PostgreSQL (perfil `postgres`) | `backend/<servicio>/src/main/resources/application-postgres.yml` |
+| Esquema y datos de prueba (Flyway) | `backend/<servicio>/src/main/resources/db/migration/` |
 
-Si no está instalado:
+> Los `application.yml` se quedan dentro de cada servicio a propósito: así el servicio arranca igual en el IDE,
+> en las pruebas y en el contenedor. Todo lo que cambia entre entornos se **sobrescribe con variables de entorno**
+> (por ejemplo `DB_HOST`, `JWT_SECRET`, `SERVER_PORT`), que vienen de `.env` a través de `compose.yaml`.
 
-```bash
-sudo apt update
-sudo apt install -y openjdk-21-jdk
-```
+### 4.2 Variables de `.env`
 
-Si tienes varias versiones de Java, selecciona la 21:
-
-```bash
-sudo update-alternatives --config java
-sudo update-alternatives --config javac
-```
-
-Configura `JAVA_HOME` (agrega estas líneas al final de `~/.bashrc`):
-
-```bash
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-export PATH="$JAVA_HOME/bin:$PATH"
-```
-
-Y recarga la terminal:
-
-```bash
-source ~/.bashrc
-```
-
-### 3.2 Maven
-
-```bash
-mvn -v                   # debe mostrar Maven 3.6.3 o superior y "Java version: 21"
-```
-
-Si no está instalado:
-
-```bash
-sudo apt install -y maven
-```
-
-> Si `mvn -v` muestra una versión de Java distinta de 21, revisa `JAVA_HOME` (paso 3.1).
-> También puedes usar el Maven que trae IntelliJ IDEA.
-
-### 3.3 Node.js 22.22 o superior
-
-Angular 22 **no funciona con Node 20 o anterior**.
-
-```bash
-node -v                  # debe ser v22.22.0 o superior (o v24.x)
-npm -v
-```
-
-Si no lo tienes o es más viejo, instálalo con **nvm**:
-
-```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-source ~/.bashrc
-nvm install 22
-nvm use 22
-node -v
-```
-
-### 3.4 curl (para el script y las pruebas)
-
-```bash
-sudo apt install -y curl
-```
-
----
-
-## 4. Compilar el backend
-
-```bash
-cd backend
-mvn clean install
-```
-
-- Descarga las dependencias (la primera vez tarda varios minutos).
-- Compila los 6 módulos y ejecuta las pruebas.
-- Al terminar debe decir **`BUILD SUCCESS`** y dejar un `.jar` en cada `*/target/`.
-
-Para compilar más rápido sin ejecutar pruebas:
-
-```bash
-mvn clean install -DskipTests
-```
-
-Para compilar un solo servicio (y `common`, del que depende):
-
-```bash
-mvn -pl inventario-service -am install -DskipTests
-```
-
----
-
-## 5. Ejecutar el backend
-
-**El orden importa:** primero Eureka, después los servicios y al final el gateway.
-
-### Opción A: con el script (recomendada)
-
-Desde la carpeta `sistema-inventario/`:
-
-```bash
-chmod +x scripts/*.sh          # solo la primera vez
-./scripts/iniciar-backend.sh
-```
-
-El script compila sin pruebas, levanta los 5 servicios en segundo plano y espera a que respondan.
-Los logs quedan en `logs/<servicio>.log`:
-
-```bash
-tail -f logs/inventario-service.log        # ver el log de un servicio en vivo
-```
-
-### Opción B: cada servicio en su propia terminal
-
-Útil para ver los logs de cada uno. Primero compila (paso 4), luego, **desde `backend/`**, abre
-5 terminales y ejecuta uno por terminal, en este orden:
-
-```bash
-# Terminal 1: espera a ver "Started DiscoveryServerApplication"
-mvn -pl discovery-server spring-boot:run
-
-# Terminales 2, 3 y 4
-mvn -pl auth-service spring-boot:run
-mvn -pl catalogos-service spring-boot:run
-mvn -pl inventario-service spring-boot:run
-
-# Terminal 5: al final
-mvn -pl api-gateway spring-boot:run
-```
-
-### Opción C: con los .jar ya compilados
-
-```bash
-cd backend
-java -jar discovery-server/target/discovery-server-0.1.0-SNAPSHOT.jar
-java -jar auth-service/target/auth-service-0.1.0-SNAPSHOT.jar
-java -jar catalogos-service/target/catalogos-service-0.1.0-SNAPSHOT.jar
-java -jar inventario-service/target/inventario-service-0.1.0-SNAPSHOT.jar
-java -jar api-gateway/target/api-gateway-0.1.0-SNAPSHOT.jar
-```
-
-### Opción D: desde IntelliJ IDEA
-
-1. `File > Open` y elige la carpeta `backend/` (se detecta como proyecto Maven).
-2. `File > Project Structure > Project SDK`: elige Java 21.
-3. Ejecuta con el botón ▶ la clase `*Application` de cada módulo, en el orden de la opción B.
-
-### Variables de entorno opcionales
-
-| Variable | Valor por defecto | Para qué |
+| Variable | Por defecto | Uso |
 |---|---|---|
-| `JWT_SECRET` | secreto de desarrollo | Llave del JWT. Debe ser **igual** en auth, catalogos e inventario (mínimo 32 caracteres) |
-| `EUREKA_URL` | `http://localhost:8761/eureka` | Dirección de Eureka |
-| `FRONTEND_URL` | `http://localhost:4200` | Origen permitido por CORS en el gateway |
+| `PUERTO_FRONTEND` | `18200` | Puerto de la aplicación web |
+| `PUERTO_GATEWAY` | `18090` | Puerto del api-gateway |
+| `PUERTO_EUREKA` | `18761` | Puerto de Eureka |
+| `PUERTO_AUTH` / `PUERTO_CATALOGOS` / `PUERTO_INVENTARIO` | `18081` / `18082` / `18083` | Puertos de los microservicios |
+| `PUERTO_POSTGRES` | `15432` | Puerto de PostgreSQL **en tu máquina** (dentro del contenedor es 5432) |
+| `DB_USER` / `DB_PASSWORD` | `inventario` / `inventario123` | Credenciales de PostgreSQL (solo se aplican al crear el volumen) |
+| `JWT_SECRET` | (valor de desarrollo) | Secreto compartido del JWT, mínimo 32 caracteres |
+| `JAVA_OPTS` | `-Xms64m -Xmx384m -XX:+UseSerialGC` | Memoria de cada JVM |
+| `JAVA_VERSION` / `NODE_VERSION` / `POSTGRES_VERSION` | `21` / `24` / `17` | Versiones de las imágenes base (argumentos de construcción) |
 
-Ejemplo:
+`.env` **no se sube a Git** (está en `.gitignore`); `.env.example` sí.
+
+### 4.3 Dockerfiles: `ARG` y `ENV`
+
+- **`ARG`**: solo existe al **construir** la imagen. Se usa para versiones (`JAVA_VERSION`, `NODE_VERSION`,
+  `POSTGRES_VERSION`) y para elegir el microservicio (`SERVICIO`).
+- **`ENV`**: valores por defecto **al ejecutar** el contenedor (`SERVER_PORT`, `JAVA_OPTS`, `TZ`, `GATEWAY_URL`...).
+  `compose.yaml` los sobrescribe.
+- **Nunca** se ponen contraseñas en un Dockerfile (quedarían grabadas en la imagen): llegan en tiempo de
+  ejecución desde `.env`.
+
+| Dockerfile | Contexto | Genera |
+|---|---|---|
+| `backend/Dockerfile` | `./backend` | Una imagen por microservicio con `--build-arg SERVICIO=<modulo>`. Compila con Maven solo ese módulo (y `common`) y la imagen final lleva solo el JRE y el `.jar`, ejecutado con un usuario sin privilegios. |
+| `frontend/Dockerfile` | `.` (raíz) | Compila Angular y lo sirve con nginx. Usa `config-files/nginx/default.conf.template`, donde `${PUERTO_FRONTEND}` y `${GATEWAY_URL}` se reemplazan al arrancar. |
+| `config-files/postgres/Dockerfile` | `./config-files/postgres` | PostgreSQL 17 con `01-crear-bases.sh`, que crea las bases listadas en `BASES_DATOS` la primera vez. |
+
+Construir una imagen a mano (sin compose):
 
 ```bash
-export JWT_SECRET="mi-secreto-largo-de-al-menos-32-caracteres-123"
-./scripts/iniciar-backend.sh
+podman build --build-arg SERVICIO=auth-service -t localhost/inventario-auth-service ./backend
+podman build -f frontend/Dockerfile -t localhost/inventario-frontend .
+podman build -t localhost/inventario-postgres ./config-files/postgres
 ```
 
 ---
 
-## 6. Ejecutar el frontend
+## 5. Base de datos
 
-En otra terminal:
+### 5.1 Una base por microservicio
+
+| Base | Servicio | Tablas |
+|---|---|---|
+| `inventario_auth` | auth-service | `rol`, `usuario`, `usuario_rol` |
+| `inventario_catalogos` | catalogos-service | `edificio_campus`, `distribuidor`, `categoria_software`, `departamento`, `experto_soporte`, `sistema_operativo` |
+| `inventario_equipos` | inventario-service | `computadora` (siguientes: `software`, `instalacion_software`, `instalacion_so`, `mantenimiento`) |
+
+Las tablas las crea **Flyway** al arrancar cada servicio:
+
+- `V1__esquema_*.sql`: tablas con los `CHECK`, llaves únicas y foráneas del Avance 1, adaptadas a PostgreSQL.
+- `V2__datos_prueba.sql`: los datos de prueba del Avance 1.
+
+Hibernate solo **valida** que las entidades coincidan con las tablas (`ddl-auto: validate`).
+Los usuarios de prueba los crea `auth-service` al arrancar, con las contraseñas cifradas con BCrypt.
+
+Los datos viven en el volumen `pgdata` y **se conservan** entre reinicios. `podman-compose down -v` los borra.
+
+### 5.2 Conectarse
+
+**Desde la terminal**, sin instalar nada:
 
 ```bash
-cd frontend
-npm install          # solo la primera vez (o cuando cambie package.json)
-npm start            # equivale a: npx ng serve
+podman exec -it inventario-postgres psql -U inventario -d inventario_catalogos
 ```
 
-Abre **http://localhost:4200**.
-
-En desarrollo, las llamadas a `/api/...` se redirigen al gateway (`localhost:8080`) mediante
-`proxy.conf.json`, así que el backend debe estar levantado.
-
-Para generar la versión de producción:
-
-```bash
-npm run build        # resultado en frontend/dist/
+```sql
+\l                                -- listar bases
+\dt                               -- listar tablas
+SELECT * FROM edificio_campus;
+SELECT e.num_empleado, e.primer_nombre, d.nombre AS departamento
+  FROM experto_soporte e JOIN departamento d ON d.id_departamento = e.id_departamento;
+\c inventario_equipos             -- cambiar de base
+SELECT num_inventario, marca, modelo, fecha_fin_garantia FROM computadora
+ WHERE fecha_fin_garantia < CURRENT_DATE;   -- equipos fuera de garantía
+\c inventario_auth
+SELECT u.username, r.nombre FROM usuario u
+  JOIN usuario_rol ur ON ur.id_usuario = u.id_usuario JOIN rol r ON r.id_rol = ur.id_rol;
+\q                                -- salir
 ```
 
-### Usuarios de prueba
+**Desde DBeaver o pgAdmin:**
 
-| Usuario | Contraseña | Rol | Puede |
-|---|---|---|---|
-| `admin` | `Admin123!` | ADMIN | Todo: catálogos, equipos, usuarios |
-| `soporte` | `Soporte123!` | SOPORTE | Registrar y editar computadoras |
-| `consulta` | `Consulta123!` | CONSULTA | Solo consultar |
+| Dato | Valor |
+|---|---|
+| Host | `localhost` |
+| Puerto | `15432` |
+| Usuario / contraseña | `inventario` / `inventario123` |
+| Bases | `inventario_auth`, `inventario_catalogos`, `inventario_equipos` |
+
+### 5.3 Cambios al esquema
+
+No edites un `V1__` o `V2__` que ya se aplicó (Flyway detecta el cambio y el servicio no arranca).
+Crea una migración nueva, por ejemplo `V3__software.sql`, en `db/migration/` del servicio correspondiente.
 
 ---
 
-## 7. Verificar que todo funciona
+## 6. Probar la API con curl
 
-1. **Eureka**: abre http://localhost:8761. En *Instances currently registered* deben aparecer
-   `API-GATEWAY`, `AUTH-SERVICE`, `CATALOGOS-SERVICE` e `INVENTARIO-SERVICE`.
-   El registro tarda **unos 30 segundos** después de que arrancan.
-2. **Salud de cada servicio**:
-   ```bash
-   curl localhost:8081/actuator/health    # {"status":"UP"}
-   curl localhost:8082/actuator/health
-   curl localhost:8083/actuator/health
-   curl localhost:8080/actuator/health
-   ```
-3. **Frontend**: entra con `admin`. En *Inicio* deben verse 3 computadoras y 3 edificios
-   (los datos de prueba del Avance 1).
-
----
-
-## 8. Probar la API con curl
-
-Todo pasa por el gateway (puerto 8080).
+Todo pasa por el gateway (puerto 18090):
 
 ```bash
 # 1) Login: obtener el token
-TOKEN=$(curl -s -X POST localhost:8080/api/auth/login \
+TOKEN=$(curl -s -X POST localhost:18090/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"Admin123!"}' \
   | sed -E 's/.*"token":"([^"]+)".*/\1/')
 echo $TOKEN
 
 # 2) Mi usuario
-curl -s localhost:8080/api/auth/me -H "Authorization: Bearer $TOKEN"
+curl -s localhost:18090/api/auth/me -H "Authorization: Bearer $TOKEN"
 
 # 3) Catálogos
-curl -s localhost:8080/api/catalogos/edificios -H "Authorization: Bearer $TOKEN"
-curl -s localhost:8080/api/catalogos/expertos -H "Authorization: Bearer $TOKEN"
+curl -s localhost:18090/api/catalogos/edificios -H "Authorization: Bearer $TOKEN"
+curl -s localhost:18090/api/catalogos/expertos  -H "Authorization: Bearer $TOKEN"
 
 # 4) Computadoras (búsqueda paginada con filtros)
-curl -s "localhost:8080/api/inventario/computadoras?estado=Activo&page=0&size=10" \
+curl -s "localhost:18090/api/inventario/computadoras?estado=Activo&page=0&size=10" \
   -H "Authorization: Bearer $TOKEN"
 
 # 5) Crear una computadora (valida edificio y distribuidor contra catalogos-service)
-curl -s -X POST localhost:8080/api/inventario/computadoras \
+curl -s -X POST localhost:18090/api/inventario/computadoras \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{
     "numInventario": "ESCOM-00200", "numeroSerie": "SN-TEST-001",
@@ -357,56 +366,126 @@ curl -s -X POST localhost:8080/api/inventario/computadoras \
   }'
 
 # 6) Error esperado: edificio inexistente -> 409 "No existe el edificio con id 99"
-curl -s -X POST localhost:8080/api/inventario/computadoras \
+curl -s -X POST localhost:18090/api/inventario/computadoras \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"numInventario":"X-1","numeroSerie":"X-1","marca":"X","modelo":"X","tipoEquipo":"Servidor",
        "fechaCompra":"2026-01-01","costoAdquisicion":1,"estado":"Activo","idEdificio":99,"idDistribuidor":1}'
 
 # 7) Sin token -> 401
-curl -i localhost:8080/api/catalogos/edificios
+curl -i localhost:18090/api/catalogos/edificios
+
+# Salud de cada servicio
+for p in 18761 18081 18082 18083 18090; do echo -n "$p: "; curl -s localhost:$p/actuator/health; echo; done
 ```
 
 ---
 
-## 9. Detener el sistema
+## 7. Modo local (sin contenedores)
 
-| Cómo lo iniciaste | Cómo detenerlo |
-|---|---|
-| Script | `./scripts/detener-backend.sh` |
-| Terminales / `java -jar` | `Ctrl + C` en cada terminal |
-| Frontend | `Ctrl + C` en la terminal de `npm start` |
+Útil para programar: cada servicio corre con Maven y usa una base **H2 en memoria** (se borra al detenerlo).
 
-Si quedó algún proceso colgado:
+> No uses el modo local y los contenedores a la vez: ocupan los mismos puertos.
+> Detén los contenedores con `podman-compose stop`.
+
+### 7.1 Requisitos
 
 ```bash
-pkill -f 'SNAPSHOT.jar'           # procesos iniciados con java -jar o el script
-pkill -f 'spring-boot:run'        # procesos iniciados con Maven
+# Java 21
+sudo apt install -y openjdk-21-jdk
+java -version                         # debe decir 21
+# Si tienes varias versiones:
+sudo update-alternatives --config java
+# JAVA_HOME (agregar al final de ~/.bashrc y luego: source ~/.bashrc)
+export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+export PATH="$JAVA_HOME/bin:$PATH"
+
+# Maven
+sudo apt install -y maven
+mvn -v                                # debe mostrar "Java version: 21"
+
+# Node.js 22.22.3+ con nvm (Angular 22 no funciona con Node 20)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+source ~/.bashrc
+nvm install 22 && nvm use 22 && nvm alias default 22
+node -v                               # v22.22.3 o mayor
 ```
 
-> Como la base es H2 en memoria, **al detener un servicio se pierden los cambios** y al volver a
-> arrancarlo se cargan otra vez los datos de prueba.
+### 7.2 Ejecutar
 
----
+```bash
+cd "~/Documents/Backen and Client/Proyecto-Backend/sistema-inventario"
 
-## 10. Solución de problemas
+# Terminal 1: backend (compila y levanta los 5 servicios en orden, con H2)
+./scripts/iniciar-backend.sh
+tail -f logs/auth-service.log         # ver el log de un servicio
+./scripts/detener-backend.sh          # detener
 
-| Síntoma | Causa probable | Solución |
+# Terminal 2: frontend
+cd frontend
+npm install                           # solo la primera vez
+npm start                             # http://localhost:18200
+```
+
+Otras formas de arrancar el backend:
+
+```bash
+cd backend
+mvn clean install                         # compilar todo y ejecutar pruebas
+mvn -pl discovery-server spring-boot:run  # cada servicio en su terminal, en este orden:
+mvn -pl auth-service spring-boot:run      #   discovery-server, auth, catalogos,
+mvn -pl catalogos-service spring-boot:run #   inventario y al final api-gateway
+mvn -pl inventario-service spring-boot:run
+mvn -pl api-gateway spring-boot:run
+```
+
+En IntelliJ: abre la carpeta `backend/` como proyecto Maven (SDK 21) y ejecuta la clase `*Application` de cada
+módulo en el mismo orden.
+
+### 7.3 Consola H2 (solo modo local)
+
+| Servicio | Consola | JDBC URL |
 |---|---|---|
-| `release version 21 not supported` / `invalid target release: 21` | Maven usa otro JDK | Revisa `mvn -v` y `JAVA_HOME` (paso 3.1) |
-| `Port 8080 was already in use` | Otro proceso usa el puerto | `sudo lsof -i :8080` y luego `kill <PID>`, o `./scripts/detener-backend.sh` |
-| El gateway responde **503** al principio | Los servicios aún no se registran en Eureka | Espera ~30 s y revisa http://localhost:8761 |
-| **503** "catalogos-service no responde" al guardar una computadora | `catalogos-service` está apagado | Levántalo y espera a que aparezca en Eureka |
-| **401** en todas las peticiones | Token vencido o `JWT_SECRET` distinto entre servicios | Vuelve a iniciar sesión; usa el mismo `JWT_SECRET` en todos |
-| **403** | El rol no tiene permiso | Usa `admin` para modificar catálogos |
-| En Angular: "No se pudo conectar con el servidor" | El gateway no está levantado | Inicia el backend (paso 5) |
-| `npm install` falla con `EBADENGINE` o error de TypeScript | Node demasiado viejo | `node -v` debe ser ≥ 22.22 (paso 3.3) |
-| `ng: command not found` | No se instaló el CLI global | No hace falta: usa `npm start` o `npx ng serve` |
-| `BUILD FAILURE` en un módulo | Error de compilación | Ejecuta `mvn clean install -e` y revisa el primer error |
-| Los datos que capturé desaparecieron | H2 es en memoria | Es normal en esta etapa; se resolverá con PostgreSQL |
+| auth-service | http://localhost:18081/h2-console | `jdbc:h2:mem:auth` |
+| catalogos-service | http://localhost:18082/h2-console | `jdbc:h2:mem:catalogos` |
+| inventario-service | http://localhost:18083/h2-console | `jdbc:h2:mem:inventario` |
+
+Usuario `sa`, contraseña vacía.
 
 ---
 
-## 11. Endpoints
+## 8. Solución de problemas
+
+### 8.1 Contenedores
+
+| Síntoma | Causa / solución |
+|---|---|
+| `ls: can't open '/docker-entrypoint-initdb.d/': Permission denied` | Pasaba con la versión anterior (`pod.sh`), que montaba una carpeta de tu disco en PostgreSQL y Podman sin root no la podía leer. **Ya corregido:** el script de bases se copia dentro de la imagen (`config-files/postgres/Dockerfile`). Si quedó un pod viejo: `podman pod rm -f proyecto-backend` |
+| `address already in use` / `port is already allocated` | Un puerto está ocupado (¿el pod viejo o el modo local?): `podman pod rm -f proyecto-backend`, `./scripts/detener-backend.sh`, o `sudo ss -ltnp \| grep <puerto>`. También puedes cambiar el puerto en `.env` |
+| Un servicio se reinicia una y otra vez | `podman-compose logs --tail 100 <servicio>` muestra el error |
+| `UnknownHostException: postgres` o `discovery-server` | Falta el DNS de redes de Podman: `sudo apt install -y aardvark-dns` (Podman 4+) o `golang-github-containernetworking-plugin-dnsname` (Podman 3). Luego `podman-compose down && podman-compose up -d` |
+| `password authentication failed` | Cambiaste `DB_PASSWORD` con una base ya creada. Para empezar de cero: `podman-compose down -v && podman-compose up -d` |
+| Flyway: `Validate failed: Migration checksum mismatch` | Se editó una migración ya aplicada. Crea `V3__...sql` o borra la base con `podman-compose down -v` |
+| El login responde **503** al principio | Los servicios aún no se registran en Eureka (~30 s). Revisa http://localhost:18761 |
+| Login funciona pero catálogos/computadoras dan **503** ("Un servicio no está disponible") | `catalogos-service` o `inventario-service` no arrancó. Pasaba por `defer-datasource-initialization` junto con Flyway (dependencia circular); **ya corregido** en `application-postgres.yml`. Reconstruye: `podman-compose up -d --build catalogos-service inventario-service`. Revisa con `podman-compose logs --tail 100 catalogos-service` |
+| Avisos `can't raise ambient capability CAP_...` al construir | Normales con Podman sin root; se pueden ignorar |
+| `short-name ... did not resolve` | Las imágenes ya usan el nombre completo (`docker.io/library/...`); actualiza Podman si persiste |
+| Construir parece congelado en `mvn ... package` | Maven corre en modo silencioso (`-q`); la primera vez tarda varios minutos |
+
+### 8.2 Modo local
+
+| Síntoma | Causa / solución |
+|---|---|
+| `Port XXXX was already in use` / `La dirección ya se está usando` | `./scripts/detener-backend.sh`; si sigue: `sudo ss -ltnp \| grep <puerto>` y `kill <PID>` |
+| `invalid target release: 21` | Maven usa otro JDK: revisa `mvn -v` y `JAVA_HOME` |
+| `npm install` con avisos `EBADENGINE` | Node es muy viejo: `node -v` debe ser ≥ 22.22.3 (ver 7.1) |
+| `Port 18200 is already in use` al hacer `npm start` | Quedó otro `ng serve` abierto: ciérralo con `Ctrl + C` |
+| Login responde **404** con `Server: Apache` en DevTools | La petición no llegó al gateway sino a otro servidor. Por eso los puertos del proyecto están en el rango 18xxx |
+| **401** en todas las peticiones | Token vencido o `JWT_SECRET` distinto entre servicios: vuelve a iniciar sesión |
+| **403** | El rol no tiene permiso: usa `admin` para modificar catálogos |
+
+---
+
+## 9. Endpoints
 
 | Método | Ruta | Rol |
 |---|---|---|
@@ -444,15 +523,25 @@ Formato de error (RFC 9457):
 
 ---
 
-## 12. Estructura del proyecto
+## 10. Estructura del proyecto
 
 ```
 sistema-inventario/
+├── compose.yaml                     # los 7 contenedores
+├── .env.example                     # variables (copiar a .env)
+├── .dockerignore                    # exclusiones al construir el frontend (contexto raíz)
 ├── README.md
-├── scripts/
+├── config-files/
+│   ├── postgres/
+│   │   ├── Dockerfile               # imagen de PostgreSQL del proyecto
+│   │   └── 01-crear-bases.sh        # crea las bases de BASES_DATOS (primera vez)
+│   └── nginx/
+│       └── default.conf.template    # nginx del frontend (${PUERTO_FRONTEND}, ${GATEWAY_URL})
+├── scripts/                         # modo local (H2)
 │   ├── iniciar-backend.sh
 │   └── detener-backend.sh
 ├── backend/
+│   ├── Dockerfile                   # una imagen por microservicio (ARG SERVICIO)
 │   ├── pom.xml                      # POM padre (versiones de Boot y Cloud)
 │   ├── common/                      # seguridad JWT + manejo de errores
 │   ├── discovery-server/            # Eureka
@@ -469,55 +558,56 @@ sistema-inventario/
 │           │   ├── web/             # controladores REST
 │           │   └── cliente/         # llamadas a otros microservicios
 │           └── resources/
-│               ├── application.yml
-│               └── data.sql         # datos de prueba del Avance 1
+│               ├── application.yml           # valores por defecto (H2)
+│               ├── application-postgres.yml  # perfil postgres (contenedores)
+│               ├── data.sql                  # datos de prueba para H2
+│               └── db/migration/             # Flyway: V1 esquema, V2 datos
 └── frontend/
+    ├── Dockerfile                   # compila Angular y lo sirve con nginx
     ├── package.json
     ├── angular.json
-    ├── proxy.conf.json              # /api -> localhost:8080
+    ├── proxy.conf.json              # /api -> localhost:18090 (solo ng serve, modo local)
     └── src/app/
         ├── core/                    # auth, interceptor, guards, servicios HTTP, modelos
-        ├── layout/                  # barra superior
-        └── pages/                   # login, inicio, edificios, computadoras
+        ├── layout/                  # menú lateral (shell)
+        ├── shared/                  # componentes reutilizables (íconos SVG)
+        └── pages/                   # login, inicio, edificios, computadoras, usuarios
 ```
 
 ---
 
-## 13. Decisiones de diseño
+## 11. Decisiones de diseño
 
-- **Una base de datos por microservicio.** Las llaves foráneas que cruzan servicios
-  (`computadora → edificio_campus`, `computadora → distribuidor`) se guardan como **id** y se validan
-  **llamando al otro servicio** (`inventario-service/.../cliente/CatalogosClient.java`).
-  Las relaciones dentro de un mismo servicio (`experto_soporte → departamento`) sí son llaves foráneas reales.
-- **Agrupación por contexto:** computadora, software, instalaciones y mantenimiento irán en
-  `inventario-service`, para que las consultas del Avance 1 sigan siendo un `JOIN` en una sola base.
-- **JWT HS256** firmado por `auth-service` y validado en **cada** servicio, así que llamar directo
-  a un puerto sin pasar por el gateway también exige token.
-- **Roles** `ADMIN`, `SOPORTE`, `CONSULTA` aplicados con `@PreAuthorize`. Los guards de Angular solo
-  ocultan pantallas; la seguridad real está en el backend.
-- **DTOs (records) y Bean Validation** que replican los `CHECK` del script del Avance 1.
-  Las entidades nunca se devuelven directamente.
-
-### Frontend
-
-- Componentes *standalone*, `signal()` para el estado y *control flow* `@if / @for`.
-- `core/auth.interceptor.ts` agrega el `Bearer` y cierra sesión ante un 401.
-- `core/auth.guard.ts`: `authGuard` (sesión) y `rolGuard('ADMIN', ...)`.
-- Los demás catálogos se construyen copiando el patrón de `pages/edificios/`.
+- **Una base de datos por microservicio.** Las relaciones que cruzan servicios (`computadora → edificio_campus`,
+  `computadora → distribuidor`) se guardan como **id** y se validan **llamando al otro servicio**
+  (`inventario-service/.../cliente/CatalogosClient.java`). Dentro de un mismo servicio
+  (`experto_soporte → departamento`) sí hay llaves foráneas reales.
+- **Agrupación por contexto:** computadora, software, instalaciones y mantenimiento irán en `inventario-service`,
+  para que las consultas del Avance 1 sigan siendo un `JOIN` en una sola base.
+- **JWT HS256** firmado por `auth-service` y validado en **cada** servicio, así que llamar directo a un puerto
+  sin pasar por el gateway también exige token.
+- **Roles** `ADMIN`, `SOPORTE`, `CONSULTA` aplicados con `@PreAuthorize`. Los guards de Angular solo ocultan
+  pantallas; la seguridad real está en el backend.
+- **DTOs (records) y Bean Validation** que replican los `CHECK` del Avance 1. Las entidades nunca se devuelven
+  directamente. Errores uniformes con `ProblemDetail`.
+- **Contenedores:** una imagen por servicio, configuración por variables de entorno, sin secretos en las imágenes,
+  la configuración de infraestructura copiada en la imagen (sin montar carpetas) y el JRE ejecutado con un usuario
+  sin privilegios.
+- **Frontend:** componentes *standalone*, `signal()` para el estado y *control flow* `@if / @for`.
+  `core/auth.interceptor.ts` agrega el `Bearer` y cierra sesión ante un 401. Los demás catálogos se construyen
+  copiando el patrón de `pages/edificios/`.
 
 ---
 
-## 14. Pendientes
+## 12. Pendientes
 
-1. **PostgreSQL + Flyway**: una base por servicio, migrar el script del Avance 1 a `V1__esquema.sql`
-   y cambiar `ddl-auto` a `validate`. El "único SO principal por equipo" se resuelve con un índice
-   único parcial (`CREATE UNIQUE INDEX ... ON instalacion_so(id_computadora) WHERE es_principal`).
-2. **inventario-service**: `software`, `instalacion_software` e `instalacion_so` (llaves compuestas
-   con `@EmbeddedId` + `@MapsId`), `mantenimiento` y los **reportes** (licencias vencidas, gasto fuera
-   de garantía, arranque dual, etc.).
-3. **Redundancia controlada de `distribuidor`** (`monto_total_compra`, `numero_total_pedidos`): decidir
-   si inventario la actualiza al dar de alta un equipo o se calcula bajo demanda.
-4. **Borrado de catálogos en uso**: consultar a inventario antes de borrar un edificio o distribuidor,
-   o usar solo baja lógica (`activo = false`).
-5. Pantallas de Angular para los demás catálogos y para usuarios.
-6. Documentación OpenAPI (springdoc) y pruebas de integración con Testcontainers.
+1. **inventario-service**: `software`, `instalacion_software` e `instalacion_so` (llaves compuestas con
+   `@EmbeddedId` + `@MapsId`), `mantenimiento` y los **reportes** (licencias vencidas, gasto fuera de garantía,
+   arranque dual, etc.). El "único SO principal por equipo" se resolverá con un índice único parcial:
+   `CREATE UNIQUE INDEX ... ON instalacion_so(id_computadora) WHERE es_principal`.
+2. **Redundancia controlada de `distribuidor`** (`monto_total_compra`, `numero_total_pedidos`): decidir si
+   inventario la actualiza al dar de alta un equipo o se calcula bajo demanda.
+3. **Borrado de catálogos en uso**: consultar a inventario antes de borrar un edificio o distribuidor, o usar solo
+   baja lógica (`activo = false`).
+4. Pantallas de Angular para los demás catálogos (distribuidores, expertos, departamentos, categorías, SO).
+5. Documentación OpenAPI (springdoc) y pruebas de integración con Testcontainers.

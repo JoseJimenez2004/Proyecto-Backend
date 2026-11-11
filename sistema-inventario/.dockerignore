@@ -1,0 +1,11 @@
+# Contexto de construcción del frontend (se construye desde la raíz para poder
+# copiar config-files/nginx). Excluir lo pesado o generado.
+**/node_modules
+**/dist
+**/.angular
+**/out-tsc
+**/target
+**/*.log
+.git
+logs
+.env

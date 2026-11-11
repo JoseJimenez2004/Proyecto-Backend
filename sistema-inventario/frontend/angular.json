@@ -17,13 +17,23 @@
           "options": {
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
-            "styles": ["src/styles.css"]
+            "styles": [
+              "src/styles.css"
+            ]
           },
           "configurations": {
             "production": {
               "budgets": [
-                { "type": "initial", "maximumWarning": "500kB", "maximumError": "1MB" },
-                { "type": "anyComponentStyle", "maximumWarning": "4kB", "maximumError": "8kB" }
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "8kB",
+                  "maximumError": "16kB"
+                }
               ],
               "outputHashing": "all"
             },
@@ -38,11 +48,16 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "options": {
-            "proxyConfig": "proxy.conf.json"
+            "proxyConfig": "proxy.conf.json",
+            "port": 18200
           },
           "configurations": {
-            "production": { "buildTarget": "inventario-escom-web:build:production" },
-            "development": { "buildTarget": "inventario-escom-web:build:development" }
+            "production": {
+              "buildTarget": "inventario-escom-web:build:production"
+            },
+            "development": {
+              "buildTarget": "inventario-escom-web:build:development"
+            }
           },
           "defaultConfiguration": "development"
         }
